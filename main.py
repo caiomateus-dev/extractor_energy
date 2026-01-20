@@ -34,7 +34,24 @@ def log(msg: str) -> None:
 
 
 def _key(s: str) -> str:
-    return s.strip().lower()
+    """
+    Normaliza chaves vindas do input (ex: "CEMIG-D" -> "cemig-d") sem regex.
+    Mantém apenas [a-z0-9] e converte separadores em "-".
+    """
+    s = s.strip().lower()
+    out: list[str] = []
+    last_sep = True
+    for ch in s:
+        if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+            out.append(ch)
+            last_sep = False
+            continue
+        if not last_sep:
+            out.append("-")
+            last_sep = True
+    if out and out[-1] == "-":
+        out.pop()
+    return "".join(out)
 
 
 _PROMPT_MAP_CACHE: dict[str, Any] | None = None
@@ -210,8 +227,12 @@ def _read_prompt(concessionaria: str, uf: str) -> str:
 
     mapper = _load_prompt_map()
     prompts = mapper.get("prompts", {}) if isinstance(mapper.get("prompts", {}), dict) else {}
+    aliases = mapper.get("aliases", {}) if isinstance(mapper.get("aliases", {}), dict) else {}
 
     concessionaria_key = _key(concessionaria)
+    aliased = aliases.get(concessionaria_key)
+    if isinstance(aliased, str) and aliased.strip():
+        concessionaria_key = _key(aliased)
     uf_key = _key(uf)
 
     spec_filename: str | None = None

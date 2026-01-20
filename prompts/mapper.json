@@ -1,4 +1,7 @@
 {
+  "aliases": {
+    "cemig-d": "cemig"
+  },
   "prompts": {
     "cemig": {
       "mg": "cemig_mg.md"

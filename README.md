@@ -25,3 +25,4 @@ Em `prompts/`:
 
 - `base.md`: sempre aplicado
 - `mapper.json`: mapeia `concessionaria` + `uf` -> arquivo `.md` (ex: `equatorial` + `go` -> `equatorial_go.md`)
+- `mapper.json` também suporta `aliases` para padronizar entradas (ex: `cemig-d` -> `cemig`)
