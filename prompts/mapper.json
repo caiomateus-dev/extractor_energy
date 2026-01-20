@@ -1,0 +1,11 @@
+{
+  "prompts": {
+    "cemig": {
+      "mg": "cemig_mg.md"
+    },
+    "equatorial": {
+      "go": "equatorial_go.md",
+      "pi": "equatorial_pi.md"
+    }
+  }
+}
