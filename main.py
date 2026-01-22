@@ -693,6 +693,50 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
             log(f"[infer] output bruto (últimos 1000 chars): {output[-1000:]}")
             
+            def _find_balanced_json(text: str, start_char: str = '{') -> str | None:
+                """Encontra JSON completo com chaves/colchetes balanceados"""
+                if start_char == '{':
+                    end_char = '}'
+                    open_char, close_char = '{', '}'
+                else:
+                    end_char = ']'
+                    open_char, close_char = '[', ']'
+                
+                start_pos = text.find(start_char)
+                if start_pos == -1:
+                    return None
+                
+                depth = 0
+                in_string = False
+                escape_next = False
+                
+                for i in range(start_pos, len(text)):
+                    char = text[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    
+                    if in_string:
+                        continue
+                    
+                    if char == open_char:
+                        depth += 1
+                    elif char == close_char:
+                        depth -= 1
+                        if depth == 0:
+                            return text[start_pos:i+1]
+                
+                return None
+            
             # A resposta real do modelo vem após <|im_start|>assistant
             # Procura por esse marcador e pega tudo depois
             assistant_marker = '<|im_start|>assistant'
@@ -707,57 +751,103 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 
                 log(f"[infer] seção resposta após assistant (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
                 
-                # Procura por JSON válido na resposta (mesma estratégia do Flask)
-                # Primeiro tenta encontrar JSON dentro de ```json ... ```
-                json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', response_section, re.DOTALL)
-                if json_block_match:
-                    filtered_output = json_block_match.group(1)
-                else:
-                    # Procura por objeto JSON (deve ter pelo menos uma chave com valor não-vazio para evitar exemplo)
-                    json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*?\}', response_section, re.DOTALL)
-                    if not json_match:
-                        # Tenta lista JSON
-                        json_match = re.search(r'\[\s*\{.*?\}\s*\]', response_section, re.DOTALL)
-                    if not json_match:
-                        # Último recurso: qualquer JSON (pode ser o exemplo, mas melhor que nada)
-                        json_match = re.search(r'\{.*?\}', response_section, re.DOTALL)
-                    
-                    if json_match:
-                        filtered_output = json_match.group(0)
-                    else:
-                        filtered_output = response_section
+                # Remove delimitadores markdown primeiro (se houver)
+                # Isso ajuda a encontrar o JSON real
+                cleaned_section = re.sub(r'```json\s*', '', response_section)
+                cleaned_section = re.sub(r'\s*```', '', cleaned_section)
+                cleaned_section = cleaned_section.strip()
                 
-                # Remove delimitadores de código markdown se houver
-                filtered_output = re.sub(r'```json\s*', '', filtered_output)
-                filtered_output = re.sub(r'\s*```', '', filtered_output)
-                # Remove texto antes do JSON
-                filtered_output = re.sub(r'.*?(\{|\])', r'\1', filtered_output, count=1)
-                # Remove texto depois do JSON (até o próximo marcador ou fim)
-                filtered_output = re.sub(r'(\}|\])(?=.*?==========).*', r'\1', filtered_output)
-                filtered_output = re.sub(r'(\}|\]).*', r'\1', filtered_output, count=1)
+                # Tenta encontrar JSON completo com chaves balanceadas
+                json_start = cleaned_section.find('{')
+                if json_start != -1:
+                    log(f"[infer] encontrado {{ na posição {json_start}, tentando extrair JSON balanceado...")
+                    balanced_json = _find_balanced_json(cleaned_section[json_start:], '{')
+                    if balanced_json:
+                        # Valida se o JSON é válido tentando fazer parse
+                        try:
+                            json.loads(balanced_json)
+                            filtered_output = balanced_json
+                            log(f"[infer] JSON balanceado válido encontrado (tamanho: {len(balanced_json)} chars)")
+                        except json.JSONDecodeError as e:
+                            log(f"[infer] AVISO: JSON balanceado não é válido: {e}. Tentando fallback...")
+                            # Fallback: tenta encontrar JSON válido de outra forma
+                            # Procura pelo último } que fecha o objeto principal
+                            last_brace = cleaned_section.rfind('}')
+                            if last_brace > json_start:
+                                potential_json = cleaned_section[json_start:last_brace+1]
+                                try:
+                                    json.loads(potential_json)
+                                    filtered_output = potential_json
+                                    log(f"[infer] JSON válido encontrado via fallback (tamanho: {len(potential_json)} chars)")
+                                except json.JSONDecodeError:
+                                    filtered_output = balanced_json  # Usa o que encontrou mesmo assim
+                            else:
+                                filtered_output = balanced_json
+                    else:
+                        log(f"[infer] AVISO: _find_balanced_json retornou None. Tentando fallback...")
+                        # Fallback: procura pelo último } que fecha o objeto
+                        last_brace = cleaned_section.rfind('}')
+                        if last_brace > json_start:
+                            potential_json = cleaned_section[json_start:last_brace+1]
+                            try:
+                                json.loads(potential_json)
+                                filtered_output = potential_json
+                                log(f"[infer] JSON válido encontrado via fallback rfind (tamanho: {len(potential_json)} chars)")
+                            except json.JSONDecodeError:
+                                # Último recurso: tenta lista JSON
+                                list_start = cleaned_section.find('[')
+                                if list_start != -1:
+                                    balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
+                                    if balanced_list:
+                                        filtered_output = balanced_list
+                                    else:
+                                        filtered_output = cleaned_section
+                                else:
+                                    filtered_output = cleaned_section
+                        else:
+                            filtered_output = cleaned_section
+                else:
+                    # Tenta lista JSON se não encontrou objeto
+                    list_start = cleaned_section.find('[')
+                    if list_start != -1:
+                        balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
+                        if balanced_list:
+                            filtered_output = balanced_list
+                        else:
+                            filtered_output = cleaned_section
+                    else:
+                        filtered_output = cleaned_section
+                
+                filtered_output = filtered_output.strip()
+                
                 # Substitui vírgula por ponto em números (formato brasileiro)
                 filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
             else:
                 # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
-                # Procura todos os JSONs e pega o último (que deve ser a resposta)
-                all_json_matches = list(re.finditer(r'\{\s*".*?":\s*.*?\}', output, re.DOTALL))
-                if all_json_matches:
+                # Encontra todas as posições de '{' e tenta extrair JSON completo de cada uma
+                json_candidates = []
+                pos = 0
+                while True:
+                    pos = output.find('{', pos)
+                    if pos == -1:
+                        break
+                    balanced_json = _find_balanced_json(output[pos:], '{')
+                    if balanced_json:
+                        json_candidates.append((pos, balanced_json))
+                    pos += 1
+                
+                if json_candidates:
                     # Pega o último JSON encontrado (deve ser a resposta do modelo)
-                    last_json_match = all_json_matches[-1]
-                    filtered_output = last_json_match.group(0)
-                    # Remove delimitadores e limpa
-                    filtered_output = re.sub(r'```json\s*', '', filtered_output)
-                    filtered_output = re.sub(r'\s*```', '', filtered_output)
-                    filtered_output = re.sub(r'.*?(\{)', r'\1', filtered_output, count=1)
-                    filtered_output = re.sub(r'(\}).*', r'\1', filtered_output, count=1)
+                    _, filtered_output = json_candidates[-1]
+                    # Remove delimitadores markdown se houver
+                    filtered_output = re.sub(r'^```json\s*', '', filtered_output, flags=re.MULTILINE)
+                    filtered_output = re.sub(r'\s*```$', '', filtered_output, flags=re.MULTILINE)
+                    filtered_output = filtered_output.strip()
+                    # Substitui vírgula por ponto em números
                     filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
                 else:
-                    # Último recurso: procura qualquer JSON
-                    json_match = re.search(r'\{.*?\}', output, re.DOTALL)
-                    if json_match:
-                        filtered_output = json_match.group(0)
-                    else:
-                        filtered_output = output
+                    # Último recurso: retorna o output completo
+                    filtered_output = output
             
             log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
             return filtered_output
