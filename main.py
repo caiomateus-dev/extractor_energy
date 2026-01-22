@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import tempfile
+import threading
 from pathlib import Path
 from importlib.util import find_spec
 from typing import Any, Dict, Optional, Tuple
@@ -232,6 +233,9 @@ if _HAS_OBJECT_DETECTION:
 
 
 _GATE = asyncio.Semaphore(settings.max_concurrency)
+# Lock síncrono para proteger operações Metal (não thread-safe)
+# Necessário porque Metal não suporta acesso concorrente mesmo de processos diferentes
+_METAL_LOCK = threading.Lock()
 
 
 def _read_prompt(concessionaria: str, uf: str) -> str:
@@ -590,32 +594,35 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     loop = asyncio.get_running_loop()
 
     def _run() -> str:
-        try:
-            result = generate(
-                MODEL,
-                PROCESSOR,
-                formatted_prompt,
-                images,
-                verbose=True,  # Ativado para debug - mostra progresso da geração
-                max_tokens=settings.max_tokens,
-                temperature=settings.temperature,
-            )
-            # MLX-VLM pode retornar GenerationResult ou string diretamente
-            # Extrai o texto em ambos os casos
-            if hasattr(result, 'text'):
-                return result.text
-            elif hasattr(result, '__str__'):
-                return str(result)
-            elif isinstance(result, str):
-                return result
-            else:
-                # Tenta converter para string
-                return str(result)
-        finally:
-            # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
-            _clear_metal_cache()
-            # Força garbage collection
-            gc.collect()
+        # Lock síncrono para proteger operações Metal (Metal não é thread-safe)
+        # Isso garante que apenas uma operação Metal ocorra por vez, mesmo com múltiplos workers
+        with _METAL_LOCK:
+            try:
+                result = generate(
+                    MODEL,
+                    PROCESSOR,
+                    formatted_prompt,
+                    images,
+                    verbose=True,  # Ativado para debug - mostra progresso da geração
+                    max_tokens=settings.max_tokens,
+                    temperature=settings.temperature,
+                )
+                # MLX-VLM pode retornar GenerationResult ou string diretamente
+                # Extrai o texto em ambos os casos
+                if hasattr(result, 'text'):
+                    return result.text
+                elif hasattr(result, '__str__'):
+                    return str(result)
+                elif isinstance(result, str):
+                    return result
+                else:
+                    # Tenta converter para string
+                    return str(result)
+            finally:
+                # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
+                _clear_metal_cache()
+                # Força garbage collection
+                gc.collect()
 
     return await asyncio.wait_for(
         loop.run_in_executor(None, _run),
