@@ -44,12 +44,13 @@ REGRAS IMPORTANTES:
 2. valor_fatura: Número float com ponto decimal. Remova "R$" e separadores de milhar. Exemplo: "R$ 1.234,56" vira 1234.56
 3. aliquota_icms: Número (ex: 0, 10, 12, 18, 19, 22, 23, 23,5) ou null se não existir
 4. Booleanos: true ou false (nunca "sim"/"não")
-5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio
+5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio. 
+   CRÍTICO: NUNCA inclua a fatura atual (mes_referencia) nesta lista. Apenas débitos de meses ANTERIORES ao mes_referencia.
 6. Datas:
    - mes_referencia: formato "MM/AAAA" (ex: "01/2024")
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
-7. Se houver débitos anteriores: faturas_venc = true e preencha valores_em_aberto
-8. Se não houver débitos: faturas_venc = false e valores_em_aberto = []
+7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
+8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
 9. Endereço e Cliente:
    - nome_cliente: Nome completo do cliente (geralmente no topo da fatura)
    - rua: Nome da rua/avenida

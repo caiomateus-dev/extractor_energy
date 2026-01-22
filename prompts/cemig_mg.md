@@ -120,36 +120,75 @@ tarifa_branca:
 VALORES EM ABERTO (DÉBITOS ANTERIORES)
 ==========================
 
-ATENÇÃO: Débitos anteriores são faturas de MESES ANTERIORES que estão em aberto, NÃO a fatura atual.
+REGRA ABSOLUTA - LEIA COM MUITA ATENÇÃO:
+
+valores_em_aberto contém APENAS faturas de MESES ANTERIORES que estão em aberto/vencidas.
+A FATURA ATUAL (mes_referencia) NUNCA deve aparecer em valores_em_aberto.
+
+EXEMPLO:
+- Se mes_referencia = "12/2025" e valor_fatura = 199.68
+- Então valores_em_aberto NÃO deve conter {"mes_ano": "12/2025", "valor": 199.68}
+- Isso está ERRADO! A fatura de 12/2025 é a fatura atual, não um débito anterior.
+
+COMO IDENTIFICAR DÉBITOS ANTERIORES:
 
 Procure por uma seção ou quadro com título semelhante a:
-
 - "REAVISO DE CONTAS VENCIDAS"  
-  ou
 - "DÉBITOS ANTERIORES"
-  ou
 - "NOTIFICAÇÃO DE DÉBITO(S)"
+- "CONTAS VENCIDAS"
 
-REGRA CRÍTICA:
+REGRA CRÍTICA DE VALIDAÇÃO:
 
-- Se essa seção existir mas estiver VAZIA (sem linhas de débitos listados):
-  → valores_em_aberto = []
-  → faturas_venc = false
+1. Se essa seção NÃO existir na fatura:
+   → valores_em_aberto = []
+   → faturas_venc = false
 
-- Se essa seção existir e tiver DÉBITOS LISTADOS (com mês/ano e valor):
-  → Para cada linha de débito encontrada, extraia:
-    - mes_ano no formato "MM/AAAA" (deve ser um mês ANTERIOR ao mes_referencia atual)
-    - valor como float (sem R$, sem separador de milhar)
-  → Se houver ao menos um débito listado: faturas_venc = true
+2. Se essa seção existir mas estiver VAZIA (sem linhas de débitos listados, sem valores):
+   → valores_em_aberto = []
+   → faturas_venc = false
 
-- Se NÃO houver essa seção na fatura:
-  → valores_em_aberto = []
-  → faturas_venc = false
+3. Se essa seção existir e tiver DÉBITOS LISTADOS:
+   → Para cada linha de débito encontrada, verifique:
+     - O mês/ano do débito deve ser DIFERENTE e ANTERIOR ao mes_referencia atual
+     - Se o mês/ano do débito for IGUAL ao mes_referencia → IGNORE esse débito (é a fatura atual)
+     - Extraia apenas débitos com mês/ano ANTERIOR ao mes_referencia
+   → Se houver ao menos um débito válido (anterior): faturas_venc = true
+   → Se todos os débitos forem da fatura atual: valores_em_aberto = [], faturas_venc = false
+
+VALIDAÇÃO OBRIGATÓRIA ANTES DE PREENCHER - LEIA COM MUITA ATENÇÃO:
+
+ANTES de adicionar QUALQUER item em valores_em_aberto, você DEVE fazer esta verificação:
+
+1. Identifique o mes_referencia da fatura atual (ex: "12/2025")
+2. Para CADA débito que você encontrar na seção de débitos anteriores:
+   a) Compare o mes_ano do débito com o mes_referencia
+   b) Se forem IGUAIS → IGNORE esse débito completamente, NÃO adicione em valores_em_aberto
+   c) Se forem DIFERENTES → Verifique se é anterior. Se for anterior, adicione. Se não for, ignore.
+
+EXEMPLOS PRÁTICOS:
+
+Cenário 1: mes_referencia = "12/2025"
+- Se encontrar débito "12/2025" → IGNORE, não adicione (é a fatura atual)
+- Se encontrar débito "11/2025" → ADICIONE (é anterior)
+- Se encontrar débito "10/2025" → ADICIONE (é anterior)
+- Se encontrar débito "01/2026" → IGNORE (é futuro, não faz sentido)
+
+Cenário 2: mes_referencia = "01/2026"
+- Se encontrar débito "01/2026" → IGNORE, não adicione (é a fatura atual)
+- Se encontrar débito "12/2025" → ADICIONE (é anterior)
+- Se encontrar débito "11/2025" → ADICIONE (é anterior)
+
+REGRA DE OURO:
+Se mes_referencia = "X/Y", então valores_em_aberto NUNCA pode conter "X/Y".
+Apenas meses anteriores a "X/Y" podem estar em valores_em_aberto.
 
 IMPORTANTE: 
-- NUNCA inclua a fatura atual (mes_referencia) em valores_em_aberto
+- NUNCA inclua a fatura atual (mes_referencia) em valores_em_aberto - isso é um ERRO GRAVE
 - Apenas débitos de meses ANTERIORES devem ser incluídos
-- Se a seção estiver vazia ou não existir, faturas_venc = false
+- Se a seção estiver vazia ou não existir, valores_em_aberto = [] e faturas_venc = false
+- Se todos os débitos listados forem da fatura atual, valores_em_aberto = [] e faturas_venc = false
+- Se após filtrar os débitos anteriores não sobrar nenhum, valores_em_aberto = [] e faturas_venc = false
 
 ==========================
 OUTRAS REGRAS GERAIS (CEMIG)
