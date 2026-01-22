@@ -690,21 +690,56 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
             
             output = result.stdout.strip()
-            log(f"[infer] output bruto (primeiros 500 chars): {output[:500]}")
+            log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
             
-            # Remove mensagens de deprecação ou avisos que possam aparecer no início
-            lines = output.split('\n')
-            filtered_lines = []
-            for line in lines:
-                line_lower = line.lower()
-                # Pula linhas de deprecação, avisos, ou separadores
-                if any(x in line_lower for x in ['deprecated', 'calling', 'python -m', '==========', 'files:', 'prompt:']):
-                    continue
-                if line.strip():
-                    filtered_lines.append(line)
+            # O CLI imprime o prompt formatado e depois a resposta do modelo
+            # A resposta do modelo vem DEPOIS de todo o prompt formatado
+            # O prompt termina com </vision_end> seguido de </im_end> (fechando o user)
+            # A resposta do modelo vem depois disso
             
-            filtered_output = '\n'.join(filtered_lines)
-            log(f"[infer] output filtrado (primeiros 500 chars): {filtered_output[:500]}")
+            # Procura pela última ocorrência de </im_end> que fecha o prompt do usuário
+            # A resposta do modelo vem depois disso
+            last_im_end = output.rfind('</im_end>')
+            if last_im_end >= 0:
+                # Pega tudo após o último </im_end>
+                response_start = last_im_end + len('</im_end>')
+                filtered_output = output[response_start:].strip()
+                
+                # Remove qualquer token de formatação que possa ter sobrado
+                filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
+                
+                # Se ainda contém tokens, tenta uma abordagem diferente
+                if '<|' in filtered_output:
+                    # Procura pelo último </vision_end> e depois o próximo </im_end>
+                    last_vision_end = output.rfind('</vision_end>')
+                    if last_vision_end >= 0:
+                        # Procura o próximo </im_end> após </vision_end>
+                        next_im_end = output.find('</im_end>', last_vision_end)
+                        if next_im_end >= 0:
+                            response_start = next_im_end + len('</im_end>')
+                            filtered_output = output[response_start:].strip()
+                            filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
+            else:
+                # Fallback: procura por padrão JSON no output (a resposta deve ser JSON)
+                json_match = re.search(r'\{.*\}', output, re.DOTALL)
+                if json_match:
+                    filtered_output = json_match.group(0)
+                else:
+                    # Se não encontrou JSON, tenta pegar tudo após "Prompt:" e remover tokens
+                    prompt_start = output.find('Prompt:')
+                    if prompt_start >= 0:
+                        # Remove tudo até "Prompt:" e depois remove tokens
+                        filtered_output = output[prompt_start:]
+                        # Remove o prompt formatado (tudo até o último </im_end>)
+                        last_im_end_in_prompt = filtered_output.rfind('</im_end>')
+                        if last_im_end_in_prompt >= 0:
+                            filtered_output = filtered_output[last_im_end_in_prompt + len('</im_end>'):].strip()
+                        filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
+                    else:
+                        # Último recurso: remove todos os tokens e pega o que sobrar
+                        filtered_output = re.sub(r'<\|[^|]+\|>', '', output).strip()
+            
+            log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
             return filtered_output
         finally:
             # Remove arquivos temporários
