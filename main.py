@@ -8,8 +8,6 @@ import os
 import sys
 import time
 import tempfile
-import threading
-import fcntl
 from pathlib import Path
 from importlib.util import find_spec
 from typing import Any, Dict, Optional, Tuple
@@ -233,29 +231,9 @@ if _HAS_OBJECT_DETECTION:
         OBJECT_DETECTOR = None
 
 
+# Semáforo para controlar concorrência dentro do mesmo worker
+# Com múltiplos workers, cada worker tem seu próprio modelo e processa independentemente
 _GATE = asyncio.Semaphore(settings.max_concurrency)
-
-# Lock entre processos para proteger operações Metal
-# Metal não suporta acesso concorrente mesmo de processos diferentes
-# Usa file lock para funcionar entre múltiplos workers
-_METAL_LOCK_FILE = Path("/tmp/extractor_energy_metal.lock")
-
-class MetalLock:
-    """Lock entre processos usando file lock para proteger operações Metal"""
-    def __init__(self):
-        self.lock_file = None
-    
-    def __enter__(self):
-        self.lock_file = open(_METAL_LOCK_FILE, 'w')
-        # Bloqueia o arquivo exclusivamente (bloqueia até conseguir)
-        fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX)
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.lock_file:
-            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
-            self.lock_file.close()
-            self.lock_file = None
 
 
 def _read_prompt(concessionaria: str, uf: str) -> str:
@@ -614,36 +592,34 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     loop = asyncio.get_running_loop()
 
     def _run() -> str:
-        # Lock entre processos para proteger operações Metal
-        # Metal não suporta acesso concorrente mesmo de processos diferentes
-        # Isso garante que apenas uma operação Metal ocorra por vez em todo o sistema
-        with MetalLock():
-            try:
-                result = generate(
-                    MODEL,
-                    PROCESSOR,
-                    formatted_prompt,
-                    images,
-                    verbose=True,  # Ativado para debug - mostra progresso da geração
-                    max_tokens=settings.max_tokens,
-                    temperature=settings.temperature,
-                )
-                # MLX-VLM pode retornar GenerationResult ou string diretamente
-                # Extrai o texto em ambos os casos
-                if hasattr(result, 'text'):
-                    return result.text
-                elif hasattr(result, '__str__'):
-                    return str(result)
-                elif isinstance(result, str):
-                    return result
-                else:
-                    # Tenta converter para string
-                    return str(result)
-            finally:
-                # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
-                _clear_metal_cache()
-                # Força garbage collection
-                gc.collect()
+        # Sem lock - cada processo/worker acessa o Metal independentemente
+        # Se o Metal não suportar acesso concorrente, vai dar erro e precisaremos de outra solução
+        try:
+            result = generate(
+                MODEL,
+                PROCESSOR,
+                formatted_prompt,
+                images,
+                verbose=True,  # Ativado para debug - mostra progresso da geração
+                max_tokens=settings.max_tokens,
+                temperature=settings.temperature,
+            )
+            # MLX-VLM pode retornar GenerationResult ou string diretamente
+            # Extrai o texto em ambos os casos
+            if hasattr(result, 'text'):
+                return result.text
+            elif hasattr(result, '__str__'):
+                return str(result)
+            elif isinstance(result, str):
+                return result
+            else:
+                # Tenta converter para string
+                return str(result)
+        finally:
+            # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
+            _clear_metal_cache()
+            # Força garbage collection
+            gc.collect()
 
     return await asyncio.wait_for(
         loop.run_in_executor(None, _run),
