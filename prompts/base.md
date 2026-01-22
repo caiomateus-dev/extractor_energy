@@ -53,8 +53,8 @@ REGRAS IMPORTANTES:
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
 9. Endereço e Cliente:
    - nome_cliente: Nome completo do cliente (geralmente no topo da fatura)
-   - rua: Nome da rua/avenida
-   - numero: Número do endereço
+   - rua: Nome da rua/avenida SEM o número. Se encontrar "RUA EXEMPLO 140", coloque apenas "RUA EXEMPLO" no campo rua
+   - numero: Número do endereço (apenas o número). Se encontrar "RUA EXEMPLO 140", coloque "140" no campo numero
    - complemento: Complemento do endereço (apto, bloco, etc.) ou "" se não houver
    - bairro: Nome do bairro
    - cidade: Nome da cidade
