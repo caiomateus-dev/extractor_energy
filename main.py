@@ -632,11 +632,11 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
 
     def _run() -> str:
         try:
-            # Usa subprocess para chamar mlx_vlm generate como processo separado
+            # Usa subprocess para chamar mlx_vlm.generate como processo separado
             # Isso permite paralelismo real - cada chamada é um processo independente
-            # Usa o comando atualizado: mlx_vlm generate (não python -m mlx_vlm.generate)
+            # Usa python -m mlx_vlm.generate conforme documentação
             cmd = [
-                "mlx_vlm", "generate",
+                sys.executable, "-m", "mlx_vlm.generate",
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
