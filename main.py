@@ -9,6 +9,7 @@ import sys
 import time
 import tempfile
 import threading
+import fcntl
 from pathlib import Path
 from importlib.util import find_spec
 from typing import Any, Dict, Optional, Tuple
@@ -233,9 +234,28 @@ if _HAS_OBJECT_DETECTION:
 
 
 _GATE = asyncio.Semaphore(settings.max_concurrency)
-# Lock síncrono para proteger operações Metal (não thread-safe)
-# Necessário porque Metal não suporta acesso concorrente mesmo de processos diferentes
-_METAL_LOCK = threading.Lock()
+
+# Lock entre processos para proteger operações Metal
+# Metal não suporta acesso concorrente mesmo de processos diferentes
+# Usa file lock para funcionar entre múltiplos workers
+_METAL_LOCK_FILE = Path("/tmp/extractor_energy_metal.lock")
+
+class MetalLock:
+    """Lock entre processos usando file lock para proteger operações Metal"""
+    def __init__(self):
+        self.lock_file = None
+    
+    def __enter__(self):
+        self.lock_file = open(_METAL_LOCK_FILE, 'w')
+        # Bloqueia o arquivo exclusivamente (bloqueia até conseguir)
+        fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX)
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.lock_file:
+            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
+            self.lock_file.close()
+            self.lock_file = None
 
 
 def _read_prompt(concessionaria: str, uf: str) -> str:
@@ -594,9 +614,10 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     loop = asyncio.get_running_loop()
 
     def _run() -> str:
-        # Lock síncrono para proteger operações Metal (Metal não é thread-safe)
-        # Isso garante que apenas uma operação Metal ocorra por vez, mesmo com múltiplos workers
-        with _METAL_LOCK:
+        # Lock entre processos para proteger operações Metal
+        # Metal não suporta acesso concorrente mesmo de processos diferentes
+        # Isso garante que apenas uma operação Metal ocorra por vez em todo o sistema
+        with MetalLock():
             try:
                 result = generate(
                     MODEL,
