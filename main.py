@@ -264,8 +264,20 @@ else:
 # Inicializa detector de objetos para recortes
 if _HAS_OBJECT_DETECTION:
     try:
+        t_yolo_start = time.time()
         OBJECT_DETECTOR = ObjectDetection()
-        log("[boot] object detector loaded")
+        # Pré-aquece os modelos YOLO fazendo uma detecção dummy para forçar carregamento
+        # Isso evita demora na primeira requisição
+        try:
+            from detectors.object_detection import get_yolo_consumption_model, get_yolo_customer_data_model
+            # Força carregamento dos modelos
+            _ = get_yolo_consumption_model()
+            _ = get_yolo_customer_data_model()
+            log("[boot] modelos YOLO pré-carregados")
+        except Exception as e:
+            log(f"[boot] aviso: não foi possível pré-carregar modelos YOLO: {e}")
+        t_yolo_end = time.time()
+        log(f"[boot] object detector loaded em {(t_yolo_end - t_yolo_start)*1000:.1f}ms")
     except Exception as e:
         log(f"[boot] erro ao carregar object detector: {e}")
         OBJECT_DETECTOR = None
@@ -717,6 +729,8 @@ async def extract_energy(
     if len(raw) > settings.max_image_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"imagem acima do limite de {settings.max_image_mb}MB")
 
+    t_start = time.time()
+    
     img = None
     img_temp_path = None
     customer_crop_img = None
@@ -725,22 +739,29 @@ async def extract_energy(
     consumption_crop_path = None
     
     try:
+        t_load_start = time.time()
         img = _load_image(raw)
         # Libera os bytes da imagem imediatamente após carregar
         del raw
         gc.collect()
+        t_load_end = time.time()
+        log(f"[timing] carregamento imagem: {(t_load_end - t_load_start)*1000:.1f}ms")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"falha ao abrir imagem: {e}")
 
     # Salva imagem temporariamente para detecção YOLO
     if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
         try:
+            t_crop_start = time.time()
             img_temp_path = _save_image_temp(img)
             log(f"[crop] imagem salva temporariamente: {img_temp_path}")
             
             # Faz recorte de dados do cliente
             try:
+                t_customer_start = time.time()
                 customer_crop_path = OBJECT_DETECTOR.detect_and_crop_customer_data(img_temp_path)
+                t_customer_end = time.time()
+                log(f"[timing] detecção cliente: {(t_customer_end - t_customer_start)*1000:.1f}ms")
                 if customer_crop_path:
                     customer_crop_img = Image.open(customer_crop_path).convert("RGB")
                     log(f"[crop] recorte cliente/endereço criado: {customer_crop_path}")
@@ -749,16 +770,23 @@ async def extract_energy(
             
             # Faz recorte de consumo
             try:
+                t_consumption_start = time.time()
                 consumption_crop_path = OBJECT_DETECTOR.detect_and_crop_consumption(img_temp_path)
+                t_consumption_end = time.time()
+                log(f"[timing] detecção consumo: {(t_consumption_end - t_consumption_start)*1000:.1f}ms")
                 if consumption_crop_path:
                     consumption_crop_img = Image.open(consumption_crop_path).convert("RGB")
                     log(f"[crop] recorte consumo criado: {consumption_crop_path}")
             except Exception as e:
                 log(f"[crop] erro ao recortar consumo: {e}")
+            
+            t_crop_end = time.time()
+            log(f"[timing] total recortes: {(t_crop_end - t_crop_start)*1000:.1f}ms")
         except Exception as e:
             log(f"[crop] erro ao processar recortes: {e}")
 
     t0 = time.time()
+    log(f"[timing] tempo até início inferências: {(t0 - t_start)*1000:.1f}ms")
     
     # Prompt para imagem completa (dados gerais)
     prompt_full = _read_prompt(concessionaria, uf)
@@ -776,11 +804,18 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     result_consumption = None
     
     try:
+        t_gate_start = time.time()
         async with _GATE:
+            t_gate_acquired = time.time()
+            log(f"[timing] espera no semáforo: {(t_gate_acquired - t_gate_start)*1000:.1f}ms")
+            
             # Inferência 1: Imagem completa (dados gerais)
             try:
+                t_infer1_start = time.time()
                 log("[infer] iniciando inferência imagem completa")
                 result_full = await _infer_one(img, prompt_full)
+                t_infer1_end = time.time()
+                log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
             except asyncio.TimeoutError:
                 raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
             except Exception as e:
@@ -790,9 +825,12 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             # Inferência 2: Recorte cliente/endereço
             if customer_crop_img is not None:
                 try:
+                    t_infer2_start = time.time()
                     log("[infer] iniciando inferência recorte cliente/endereço")
                     prompt_customer = _read_customer_address_prompt(concessionaria, uf)
                     result_customer = await _infer_one(customer_crop_img, prompt_customer)
+                    t_infer2_end = time.time()
+                    log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
                 except Exception as e:
                     log(f"[infer] erro na inferência cliente/endereço: {e}")
                     result_customer = None
@@ -802,9 +840,12 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             # Inferência 3: Recorte consumo
             if consumption_crop_img is not None:
                 try:
+                    t_infer3_start = time.time()
                     log("[infer] iniciando inferência recorte consumo")
                     prompt_consumption = _read_consumption_prompt()
                     result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+                    t_infer3_end = time.time()
+                    log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
                 except Exception as e:
                     log(f"[infer] erro na inferência consumo: {e}")
                     result_consumption = None
@@ -873,9 +914,10 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     # Combina resultados: dados gerais da imagem completa
     payload = payload_full.copy()
     
-    # Sobrescreve com dados do cliente/endereço se disponível
+    # Sobrescreve com dados do endereço (sem nome_cliente) se disponível
+    # O nome_cliente vem apenas da inferência principal, não do crop
     if payload_customer:
-        for key in ["nome_cliente", "rua", "numero", "complemento", "bairro", "cidade", "estado", "cep"]:
+        for key in ["rua", "numero", "complemento", "bairro", "cidade", "estado", "cep"]:
             if key in payload_customer and payload_customer[key]:
                 payload[key] = payload_customer[key]
     

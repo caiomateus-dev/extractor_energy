@@ -119,11 +119,12 @@ REGRA ABSOLUTA:
 - NUNCA invente valores
 - NUNCA copie valores de outras seções (aliquota_icms, valores faturados, tabelas, etc.)
 
-OUTRAS REGRAS
+==========================
+OBRIGATORIO
 ==========================
 
 - distribuidora: sempre "CEMIG"
 - tensao_nominal: procurar por "Tensão Nominal" ou "Tensão"
-- cod_cliente: sempre null
 - conta_contrato: sempre null
+- cod_cliente: sempre null
 - NÃO invente valores. Se não encontrar, use "" ou null conforme o tipo

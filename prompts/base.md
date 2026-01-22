@@ -27,7 +27,8 @@ Formato do JSON esperado (todas as chaves são obrigatórias):
   "tarifa_branca": false,
   "ths_verde": false,
   "faturas_venc": false,
-  "valores_em_aberto": []
+  "valores_em_aberto": [],
+  "nome_cliente": ""
 }
 
 REGRAS IMPORTANTES:
@@ -52,5 +53,6 @@ REGRAS IMPORTANTES:
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
+9. nome_cliente: Nome completo do cliente conforme aparece na fatura. Procure próximo a "Cliente", "Nome" ou na área de identificação do cliente.
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
