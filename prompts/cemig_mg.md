@@ -112,24 +112,43 @@ OUTRAS REGRAS GERAIS (CEMIG)
 DADOS DO CLIENTE E ENDEREÇO
 ==========================
 
+ATENÇÃO CRÍTICA - IGNORE O ENDEREÇO DA CEMIG:
+
+Na fatura CEMIG, há DOIS endereços visíveis:
+1. Endereço da CEMIG (empresa) - geralmente aparece no topo, próximo ao logo, com texto como "CEMIG DISTRIBUIÇÃO S.A." ou "AV. BARBACENA" ou "BELO HORIZONTE" ou "SANTO AGOSTINHO"
+2. Endereço do CLIENTE - aparece logo abaixo ou ao lado do nome do cliente
+
+VOCÊ DEVE EXTRAIR APENAS O ENDEREÇO DO CLIENTE. IGNORE COMPLETAMENTE qualquer endereço que apareça relacionado à CEMIG ou à empresa distribuidora.
+
 1. nome_cliente
 
 - Geralmente aparece no topo da fatura, na área superior esquerda.
 - É o nome completo do titular da conta de energia.
-- Exemplo: "DORA LUCIA FERNANDES"
+- Aparece logo acima ou ao lado do endereço do CLIENTE (não da CEMIG).
 
-2. Endereço completo
+2. Endereço completo do CLIENTE
 
-Os dados de endereço geralmente aparecem logo abaixo ou ao lado do nome do cliente:
+Os dados de endereço do CLIENTE geralmente aparecem logo abaixo ou ao lado do nome do cliente, na mesma área/seção onde está o nome do cliente.
 
-- rua: Nome da rua, avenida ou logradouro
-- numero: Número do endereço
-- complemento: Complemento como apartamento, bloco, sala, etc. Use "" se não houver
-- bairro: Nome do bairro 
-- cidade: Nome da cidade
+COMO IDENTIFICAR O ENDEREÇO CORRETO:
+- O endereço do CLIENTE está sempre na mesma área/seção onde aparece o nome do cliente
+- O endereço do CLIENTE geralmente vem em múltiplas linhas logo abaixo do nome
+- O endereço da CEMIG aparece separado, geralmente no topo próximo ao logo/título da empresa
+- Se você encontrar "BELO HORIZONTE" ou "SANTO AGOSTINHO" ou "AV. BARBACENA" - esse é o endereço da CEMIG, IGNORE
+- O endereço do CLIENTE geralmente tem o CEP do cliente e a cidade/estado do cliente (não de Belo Horizonte)
+
+CAMPOS DO ENDEREÇO DO CLIENTE:
+
+- rua: Nome da rua, avenida ou logradouro do CLIENTE (NUNCA colocar numero ou complemento nesse campo)
+- numero: Número do endereço do CLIENTE
+- complemento: Complemento como apartamento, bloco, sala, caixa postal, etc. Use "" se não houver
+- bairro: Nome do bairro do CLIENTE (NÃO o bairro da CEMIG como "SANTO AGOSTINHO")
+- cidade: Nome da cidade do CLIENTE (NÃO "BELO HORIZONTE" que é da CEMIG)
 - estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG")
 
-IMPORTANTE: Separe corretamente rua e número. O número geralmente vem após o nome da rua.
+IMPORTANTE: 
+- Separe corretamente rua e número. O número geralmente vem após o nome da rua.
+- NUNCA use dados do endereço da CEMIG (empresa). Use apenas o endereço que aparece junto com o nome do cliente.
 
 =======================
 OBRIGATORIO
