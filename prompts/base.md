@@ -27,15 +27,7 @@ Formato do JSON esperado (todas as chaves são obrigatórias):
   "tarifa_branca": false,
   "ths_verde": false,
   "faturas_venc": false,
-  "valores_em_aberto": [],
-  "nome_cliente": "",
-  "rua": "",
-  "numero": "",
-  "complemento": "",
-  "bairro": "",
-  "cidade": "",
-  "estado": "",
-  "cep": ""
+  "valores_em_aberto": []
 }
 
 REGRAS IMPORTANTES:
@@ -56,14 +48,5 @@ REGRAS IMPORTANTES:
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
-9. Endereço e Cliente:
-   - nome_cliente: Nome completo do cliente (geralmente no topo da fatura)
-   - rua: Nome da rua/avenida SEM o número. Se encontrar "RUA EXEMPLO 140", coloque apenas "RUA EXEMPLO" no campo rua
-   - numero: Número do endereço (apenas o número). Se encontrar "RUA EXEMPLO 140", coloque "140" no campo numero
-   - complemento: Complemento do endereço (apto, bloco, etc.) ou "" se não houver
-   - bairro: Nome do bairro
-   - cidade: Nome da cidade
-   - estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP")
-   - cep: CEP do endereço no formato "00000-000" ou "00000000" (com ou sem hífen)
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.

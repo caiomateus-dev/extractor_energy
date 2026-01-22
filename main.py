@@ -7,9 +7,10 @@ import json
 import os
 import sys
 import time
+import tempfile
 from pathlib import Path
 from importlib.util import find_spec
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 import re
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -17,6 +18,15 @@ from fastapi.responses import JSONResponse
 from PIL import Image
 
 from config import settings
+
+# Importa detecção de objetos para recortes
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from detectors.object_detection import ObjectDetection
+    _HAS_OBJECT_DETECTION = True
+except ImportError as e:
+    _HAS_OBJECT_DETECTION = False
+    print(f"[boot] object_detection não disponível - recortes desabilitados: {e}", flush=True)
 
 _HAS_MLX_VLM = find_spec("mlx_vlm") is not None
 if _HAS_MLX_VLM:
@@ -236,6 +246,8 @@ def _log_system_metrics(tag: str) -> None:
 
 
 MODEL = PROCESSOR = CONFIG = None
+OBJECT_DETECTOR = None
+
 if not _HAS_MLX_VLM:
     log(
         "[boot] missing dependency: mlx-vlm (module: mlx_vlm). "
@@ -248,6 +260,15 @@ else:
     CONFIG = load_config(settings.model_id)
     log("[boot] model loaded")
     _log_system_metrics("[boot][mem]")
+
+# Inicializa detector de objetos para recortes
+if _HAS_OBJECT_DETECTION:
+    try:
+        OBJECT_DETECTOR = ObjectDetection()
+        log("[boot] object detector loaded")
+    except Exception as e:
+        log(f"[boot] erro ao carregar object detector: {e}")
+        OBJECT_DETECTOR = None
 
 
 _GATE = asyncio.Semaphore(settings.max_concurrency)
@@ -290,6 +311,15 @@ def _read_prompt(concessionaria: str, uf: str) -> str:
         spec = spec_path.read_text(encoding="utf-8").strip()
 
     return base + ("\n\n" + spec if spec else "")
+
+
+def _save_image_temp(img: Image.Image) -> str:
+    """Salva imagem PIL em arquivo temporário para uso com modelos YOLO"""
+    temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+    temp_path = temp_file.name
+    temp_file.close()
+    img.save(temp_path, format='PNG')
+    return temp_path
 
 
 def _load_image(raw: bytes) -> Image.Image:
@@ -382,6 +412,7 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
         "cidade": "",
         "estado": "",
         "cep": "",
+        "consumo_lista": [],
     }
 
     out = dict(template)
@@ -418,7 +449,123 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
         cleaned.append({"mes_ano": mes_ano, "valor": valor})
     out["valores_em_aberto"] = cleaned
 
+    # Valida consumo_lista
+    if not isinstance(out.get("consumo_lista"), list):
+        out["consumo_lista"] = []
+    consumo_cleaned = []
+    for item in out["consumo_lista"]:
+        if not isinstance(item, dict):
+            continue
+        mes_ano = str(item.get("mes_ano", "")).strip()
+        consumo = item.get("consumo")
+        try:
+            consumo_int = int(consumo) if consumo is not None else 0
+        except (ValueError, TypeError):
+            consumo_int = 0
+        consumo_cleaned.append({"mes_ano": mes_ano, "consumo": consumo_int})
+    out["consumo_lista"] = consumo_cleaned
+
     return out
+
+
+def _create_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str:
+    """Cria prompt específico para extração de nome do cliente e endereço"""
+    # Carrega regras específicas da concessionária se disponível
+    spec_prompt = ""
+    try:
+        mapper = _load_prompt_map()
+        prompts = mapper.get("prompts", {}) if isinstance(mapper.get("prompts", {}), dict) else {}
+        aliases = mapper.get("aliases", {}) if isinstance(mapper.get("aliases", {}), dict) else {}
+        
+        concessionaria_key = _key(concessionaria)
+        aliased = aliases.get(concessionaria_key)
+        if isinstance(aliased, str) and aliased.strip():
+            concessionaria_key = _key(aliased)
+        uf_key = _key(uf)
+        
+        spec_filename: str | None = None
+        by_uf = prompts.get(concessionaria_key)
+        if isinstance(by_uf, dict):
+            v = by_uf.get(uf_key) or by_uf.get("*")
+            if isinstance(v, str) and v.strip():
+                spec_filename = v.strip()
+        elif isinstance(by_uf, str) and by_uf.strip():
+            spec_filename = by_uf.strip()
+        
+        if spec_filename:
+            spec_path = PROMPTS_DIR / spec_filename
+            if spec_path.exists():
+                spec_content = spec_path.read_text(encoding="utf-8").strip()
+                # Extrai apenas a seção de ENDEREÇO DO CLIENTE
+                if "ENDEREÇO DO CLIENTE" in spec_content:
+                    start_idx = spec_content.find("ENDEREÇO DO CLIENTE")
+                    end_idx = spec_content.find("==========================", start_idx + 1)
+                    if end_idx == -1:
+                        end_idx = len(spec_content)
+                    spec_prompt = spec_content[start_idx:end_idx].strip()
+    except Exception:
+        pass
+    
+    base_prompt = """Analise esta imagem que contém APENAS o nome do cliente e endereço de uma fatura de energia.
+
+RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
+
+Formato do JSON esperado:
+{
+  "nome_cliente": "",
+  "rua": "",
+  "numero": "",
+  "complemento": "",
+  "bairro": "",
+  "cidade": "",
+  "estado": "",
+  "cep": ""
+}
+
+REGRAS GERAIS:
+- nome_cliente: Nome completo do cliente
+- rua: Nome da rua/avenida SEM o número. Se encontrar "RUA EXEMPLO 140", coloque apenas "RUA EXEMPLO" no campo rua
+- numero: Número do endereço (apenas o número). Se encontrar "RUA EXEMPLO 140", coloque "140" no campo numero
+- complemento: Complemento do endereço (apto, bloco, etc.) ou "" se não houver
+- bairro: Nome do bairro
+- cidade: Nome da cidade
+- estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP")
+- cep: CEP do endereço no formato "00000-000" ou "00000000" (com ou sem hífen)
+
+IMPORTANTE: Esta imagem contém APENAS dados do cliente. NÃO inclua dados da distribuidora.
+Se não encontrar algum campo, use "" (string vazia)."""
+    
+    if spec_prompt:
+        return f"""{base_prompt}
+
+REGRAS ESPECÍFICAS DA CONCESSIONÁRIA:
+{spec_prompt}"""
+    
+    return base_prompt
+
+
+def _create_consumption_prompt() -> str:
+    """Cria prompt específico para extração de consumo médio"""
+    return """Analise esta imagem que contém APENAS dados de consumo médio de uma fatura de energia.
+
+RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
+
+Formato do JSON esperado:
+{
+  "consumo_lista": [
+    {"mes_ano": "MM/AAAA", "consumo": 123},
+    {"mes_ano": "MM/AAAA", "consumo": 456}
+  ]
+}
+
+REGRAS:
+- consumo_lista: Lista de objetos com histórico de consumo mensal
+- mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
+- consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
+- Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
+
+IMPORTANTE: Extraia APENAS os valores de consumo mensal que aparecem na imagem.
+Cada entrada deve ter um mês/ano e o consumo correspondente em kWh (número inteiro)."""
 
 
 async def _infer_one(img: Image.Image, prompt_text: str) -> str:
@@ -543,6 +690,12 @@ async def extract_energy(
         raise HTTPException(status_code=413, detail=f"imagem acima do limite de {settings.max_image_mb}MB")
 
     img = None
+    img_temp_path = None
+    customer_crop_img = None
+    consumption_crop_img = None
+    customer_crop_path = None
+    consumption_crop_path = None
+    
     try:
         img = _load_image(raw)
         # Libera os bytes da imagem imediatamente após carregar
@@ -551,59 +704,153 @@ async def extract_energy(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"falha ao abrir imagem: {e}")
 
-    prompt = _read_prompt(concessionaria, uf)
-    # Adiciona contexto específico da requisição
-    prompt = f"""{prompt}
+    # Salva imagem temporariamente para detecção YOLO
+    if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
+        try:
+            img_temp_path = _save_image_temp(img)
+            log(f"[crop] imagem salva temporariamente: {img_temp_path}")
+            
+            # Faz recorte de dados do cliente
+            try:
+                customer_crop_path = OBJECT_DETECTOR.detect_and_crop_customer_data(img_temp_path)
+                if customer_crop_path:
+                    customer_crop_img = Image.open(customer_crop_path).convert("RGB")
+                    log(f"[crop] recorte cliente/endereço criado: {customer_crop_path}")
+            except Exception as e:
+                log(f"[crop] erro ao recortar cliente/endereço: {e}")
+            
+            # Faz recorte de consumo
+            try:
+                consumption_crop_path = OBJECT_DETECTOR.detect_and_crop_consumption(img_temp_path)
+                if consumption_crop_path:
+                    consumption_crop_img = Image.open(consumption_crop_path).convert("RGB")
+                    log(f"[crop] recorte consumo criado: {consumption_crop_path}")
+            except Exception as e:
+                log(f"[crop] erro ao recortar consumo: {e}")
+        except Exception as e:
+            log(f"[crop] erro ao processar recortes: {e}")
+
+    t0 = time.time()
+    
+    # Prompt para imagem completa (dados gerais)
+    prompt_full = _read_prompt(concessionaria, uf)
+    prompt_full = f"""{prompt_full}
 
 Contexto da requisição: UF={uf}, Concessionária={concessionaria}
 
 Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     
-    log(f"[prompt] tamanho do prompt: {len(prompt)} caracteres")
+    log(f"[prompt] tamanho do prompt completo: {len(prompt_full)} caracteres")
 
-    t0 = time.time()
-
-    result_text = None
+    # Resultados das 3 inferências
+    result_full = None
+    result_customer = None
+    result_consumption = None
+    
     try:
         async with _GATE:
+            # Inferência 1: Imagem completa (dados gerais)
             try:
-                result_text = await _infer_one(img, prompt)
+                log("[infer] iniciando inferência imagem completa")
+                result_full = await _infer_one(img, prompt_full)
             except asyncio.TimeoutError:
-                raise HTTPException(status_code=504, detail="timeout na inferência do modelo")
+                raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
             except Exception as e:
-                raise HTTPException(status_code=502, detail=f"erro na inferência: {e}")
+                log(f"[infer] erro na inferência imagem completa: {e}")
+                result_full = None
+            
+            # Inferência 2: Recorte cliente/endereço
+            if customer_crop_img is not None:
+                try:
+                    log("[infer] iniciando inferência recorte cliente/endereço")
+                    prompt_customer = _create_customer_address_prompt(concessionaria, uf)
+                    result_customer = await _infer_one(customer_crop_img, prompt_customer)
+                except Exception as e:
+                    log(f"[infer] erro na inferência cliente/endereço: {e}")
+                    result_customer = None
+            
+            # Inferência 3: Recorte consumo
+            if consumption_crop_img is not None:
+                try:
+                    log("[infer] iniciando inferência recorte consumo")
+                    prompt_consumption = _create_consumption_prompt()
+                    result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+                except Exception as e:
+                    log(f"[infer] erro na inferência consumo: {e}")
+                    result_consumption = None
     finally:
-        # Limpa a imagem da memória imediatamente após inferência
+        # Limpa imagens da memória
         if img is not None:
             img.close()
             del img
+        if customer_crop_img is not None:
+            customer_crop_img.close()
+            del customer_crop_img
+        if consumption_crop_img is not None:
+            consumption_crop_img.close()
+            del consumption_crop_img
+        
+        # Remove arquivos temporários
+        if img_temp_path and os.path.exists(img_temp_path):
+            try:
+                os.unlink(img_temp_path)
+            except Exception:
+                pass
+        
+        # Limpa arquivos temporários do ObjectDetection
+        if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
+            try:
+                OBJECT_DETECTOR.cleanup_temp_files()
+            except Exception:
+                pass
+        
         # Limpa cache do Metal e força garbage collection
         _clear_metal_cache()
         gc.collect()
 
-    # Garante que result_text é uma string
-    if result_text is None:
-        result_text = ""
-    elif not isinstance(result_text, str):
-        # Se for um objeto (como GenerationResult), extrai o texto
-        if hasattr(result_text, 'text'):
-            result_text = result_text.text
-        elif hasattr(result_text, '__str__'):
-            result_text = str(result_text)
-        else:
-            result_text = str(result_text)
+    # Processa resultados e combina
+    payload_full = {}
+    payload_customer = {}
+    payload_consumption = {}
     
-    # Log da resposta bruta do modelo para debug
-    log(f"[infer] resposta bruta (primeiros 500 chars): {result_text[:500] if result_text else 'None'}")
+    # Extrai JSON da inferência completa
+    if result_full:
+        try:
+            payload_full = _extract_json(result_full)
+            log(f"[infer] JSON imagem completa extraído: {json.dumps(payload_full, ensure_ascii=False)[:200]}")
+        except Exception as e:
+            log(f"[infer] ERRO ao extrair JSON imagem completa: {e}")
+            log(f"[infer] resposta completa: {result_full[:500]}")
     
-    try:
-        payload = _extract_json(result_text)
-        log(f"[infer] JSON extraído: {json.dumps(payload, ensure_ascii=False)[:200]}")
-    except Exception as e:
-        log(f"[infer] ERRO ao extrair JSON: {e}")
-        log(f"[infer] resposta completa: {result_text}")
-        payload = {}
-
+    # Extrai JSON do recorte cliente/endereço
+    if result_customer:
+        try:
+            payload_customer = _extract_json(result_customer)
+            log(f"[infer] JSON cliente/endereço extraído: {json.dumps(payload_customer, ensure_ascii=False)[:200]}")
+        except Exception as e:
+            log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
+    
+    # Extrai JSON do recorte consumo
+    if result_consumption:
+        try:
+            payload_consumption = _extract_json(result_consumption)
+            log(f"[infer] JSON consumo extraído: {json.dumps(payload_consumption, ensure_ascii=False)[:200]}")
+        except Exception as e:
+            log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+    
+    # Combina resultados: dados gerais da imagem completa
+    payload = payload_full.copy()
+    
+    # Sobrescreve com dados do cliente/endereço se disponível
+    if payload_customer:
+        for key in ["nome_cliente", "rua", "numero", "complemento", "bairro", "cidade", "estado", "cep"]:
+            if key in payload_customer and payload_customer[key]:
+                payload[key] = payload_customer[key]
+    
+    # Adiciona consumo_lista se disponível
+    if payload_consumption and "consumo_lista" in payload_consumption:
+        payload["consumo_lista"] = payload_consumption["consumo_lista"]
+    
     payload = _ensure_contract(payload, concessionaria_input=concessionaria)
 
     ms = int((time.time() - t0) * 1000)
