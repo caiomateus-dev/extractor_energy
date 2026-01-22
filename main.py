@@ -619,14 +619,32 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
 
     # Salva imagem temporariamente para subprocess
     temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    temp_prompt_file = None
     try:
         # Converte para RGB se necessário
         if img.mode != 'RGB':
             img = img.convert('RGB')
         img.save(temp_img.name, format='JPEG', quality=95)
         temp_img_path = temp_img.name
-    finally:
-        temp_img.close()
+        
+        # Para prompts longos, salva em arquivo temporário para evitar problemas com shell
+        # O CLI pode ter limitações de tamanho de argumento
+        if len(prompt_text) > 8000:  # Limite conservador para argumentos de shell
+            temp_prompt_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8')
+            temp_prompt_file.write(prompt_text)
+            temp_prompt_file.close()
+            temp_prompt_path = temp_prompt_file.name
+            use_prompt_file = True
+        else:
+            temp_prompt_path = None
+            use_prompt_file = False
+    except Exception as e:
+        if temp_img:
+            try:
+                os.unlink(temp_img.name)
+            except:
+                pass
+        raise
 
     loop = asyncio.get_running_loop()
 
@@ -635,14 +653,29 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             # Usa subprocess para chamar mlx_vlm.generate como processo separado
             # Isso permite paralelismo real - cada chamada é um processo independente
             # Usa python -m mlx_vlm.generate conforme documentação
+            # O CLI formata o prompt automaticamente, então passamos o prompt bruto
             cmd = [
                 sys.executable, "-m", "mlx_vlm.generate",
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
-                "--prompt", prompt_text,
-                "--image", temp_img_path,
             ]
+            
+            # Adiciona prompt: direto ou via arquivo
+            if use_prompt_file:
+                # Lê o prompt do arquivo e passa como argumento (alguns CLIs suportam @file)
+                # Mas mlx_vlm.generate não suporta @file, então vamos passar direto mesmo
+                # Se o arquivo for muito grande, pode ser necessário outra abordagem
+                with open(temp_prompt_path, 'r', encoding='utf-8') as f:
+                    prompt_content = f.read()
+                cmd.extend(["--prompt", prompt_content])
+            else:
+                cmd.extend(["--prompt", prompt_text])
+            
+            cmd.extend(["--image", temp_img_path])
+            
+            log(f"[infer] comando: {' '.join(cmd[:6])} ... --prompt [{len(prompt_text)} chars] --image {temp_img_path}")
+            log(f"[infer] prompt (primeiros 300 chars): {prompt_text[:300]}")
             
             result = subprocess.run(
                 cmd,
@@ -657,23 +690,34 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
             
             output = result.stdout.strip()
+            log(f"[infer] output bruto (primeiros 500 chars): {output[:500]}")
+            
             # Remove mensagens de deprecação ou avisos que possam aparecer no início
             lines = output.split('\n')
             filtered_lines = []
             for line in lines:
-                if 'deprecated' in line.lower() or 'calling' in line.lower() and 'python -m' in line.lower():
+                line_lower = line.lower()
+                # Pula linhas de deprecação, avisos, ou separadores
+                if any(x in line_lower for x in ['deprecated', 'calling', 'python -m', '==========', 'files:', 'prompt:']):
                     continue
                 if line.strip():
                     filtered_lines.append(line)
             
-            return '\n'.join(filtered_lines)
+            filtered_output = '\n'.join(filtered_lines)
+            log(f"[infer] output filtrado (primeiros 500 chars): {filtered_output[:500]}")
+            return filtered_output
         finally:
-            # Remove arquivo temporário
+            # Remove arquivos temporários
             try:
                 if os.path.exists(temp_img_path):
                     os.unlink(temp_img_path)
             except Exception:
                 pass
+            if temp_prompt_file and os.path.exists(temp_prompt_path):
+                try:
+                    os.unlink(temp_prompt_path)
+                except Exception:
+                    pass
             # Limpa cache e força garbage collection
             _clear_metal_cache()
             gc.collect()
