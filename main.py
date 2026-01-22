@@ -767,53 +767,48 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     result_consumption = None
     
     try:
-        t_gate_start = time.time()
-        async with _GATE:
-            t_gate_acquired = time.time()
-            log(f"[timing] espera no semáforo: {(t_gate_acquired - t_gate_start)*1000:.1f}ms")
-            
-            # Inferência 1: Imagem completa (dados gerais)
+        # Inferência 1: Imagem completa (dados gerais)
+        try:
+            t_infer1_start = time.time()
+            log("[infer] iniciando inferência imagem completa")
+            result_full = await _infer_one(img, prompt_full)
+            t_infer1_end = time.time()
+            log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
+        except Exception as e:
+            log(f"[infer] erro na inferência imagem completa: {e}")
+            result_full = None
+        
+        # Inferência 2: Recorte cliente/endereço
+        if customer_crop_img is not None:
             try:
-                t_infer1_start = time.time()
-                log("[infer] iniciando inferência imagem completa")
-                result_full = await _infer_one(img, prompt_full)
-                t_infer1_end = time.time()
-                log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
-            except asyncio.TimeoutError:
-                raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
+                t_infer2_start = time.time()
+                log("[infer] iniciando inferência recorte cliente/endereço")
+                prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+                result_customer = await _infer_one(customer_crop_img, prompt_customer)
+                t_infer2_end = time.time()
+                log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
             except Exception as e:
-                log(f"[infer] erro na inferência imagem completa: {e}")
-                result_full = None
-            
-            # Inferência 2: Recorte cliente/endereço
-            if customer_crop_img is not None:
-                try:
-                    t_infer2_start = time.time()
-                    log("[infer] iniciando inferência recorte cliente/endereço")
-                    prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-                    result_customer = await _infer_one(customer_crop_img, prompt_customer)
-                    t_infer2_end = time.time()
-                    log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
-                except Exception as e:
-                    log(f"[infer] erro na inferência cliente/endereço: {e}")
-                    result_customer = None
-            else:
+                log(f"[infer] erro na inferência cliente/endereço: {e}")
                 result_customer = None
-            
-            # Inferência 3: Recorte consumo
-            if consumption_crop_img is not None:
-                try:
-                    t_infer3_start = time.time()
-                    log("[infer] iniciando inferência recorte consumo")
-                    prompt_consumption = _read_consumption_prompt()
-                    result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
-                    t_infer3_end = time.time()
-                    log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
-                except Exception as e:
-                    log(f"[infer] erro na inferência consumo: {e}")
-                    result_consumption = None
-            else:
+        else:
+            result_customer = None
+        
+        # Inferência 3: Recorte consumo
+        if consumption_crop_img is not None:
+            try:
+                t_infer3_start = time.time()
+                log("[infer] iniciando inferência recorte consumo")
+                prompt_consumption = _read_consumption_prompt()
+                result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+                t_infer3_end = time.time()
+                log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
+            except Exception as e:
+                log(f"[infer] erro na inferência consumo: {e}")
                 result_consumption = None
+        else:
+            result_consumption = None
     finally:
         # Limpa imagens da memória
         if img is not None:
