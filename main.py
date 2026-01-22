@@ -692,52 +692,61 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             output = result.stdout.strip()
             log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
             
-            # O CLI imprime o prompt formatado e depois a resposta do modelo
-            # A resposta do modelo vem DEPOIS de todo o prompt formatado
-            # O prompt termina com </vision_end> seguido de </im_end> (fechando o user)
-            # A resposta do modelo vem depois disso
+            # Usa a mesma estratégia do código Flask: procura por JSON válido no output
+            # O modelo gera JSON, então procuramos pelo JSON gerado (não o exemplo do prompt)
             
-            # Procura pela última ocorrência de </im_end> que fecha o prompt do usuário
-            # A resposta do modelo vem depois disso
-            last_im_end = output.rfind('</im_end>')
-            if last_im_end >= 0:
-                # Pega tudo após o último </im_end>
-                response_start = last_im_end + len('</im_end>')
-                filtered_output = output[response_start:].strip()
+            # Primeiro, encontra onde termina o prompt formatado
+            # O prompt termina com </vision_end> seguido de </im_end>
+            prompt_end_marker = '</im_end>'
+            last_prompt_end = output.rfind(prompt_end_marker)
+            
+            if last_prompt_end >= 0:
+                # Pega tudo após o fim do prompt
+                response_section = output[last_prompt_end + len(prompt_end_marker):].strip()
                 
-                # Remove qualquer token de formatação que possa ter sobrado
-                filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
+                # Remove tokens de formatação restantes
+                response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
                 
-                # Se ainda contém tokens, tenta uma abordagem diferente
-                if '<|' in filtered_output:
-                    # Procura pelo último </vision_end> e depois o próximo </im_end>
-                    last_vision_end = output.rfind('</vision_end>')
-                    if last_vision_end >= 0:
-                        # Procura o próximo </im_end> após </vision_end>
-                        next_im_end = output.find('</im_end>', last_vision_end)
-                        if next_im_end >= 0:
-                            response_start = next_im_end + len('</im_end>')
-                            filtered_output = output[response_start:].strip()
-                            filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
-            else:
-                # Fallback: procura por padrão JSON no output (a resposta deve ser JSON)
-                json_match = re.search(r'\{.*\}', output, re.DOTALL)
+                # Procura por JSON válido na resposta (mesma estratégia do Flask)
+                # Procura por objeto JSON primeiro (mais comum)
+                json_match = re.search(r'\{\s*".*":\s*.*\}', response_section, re.DOTALL)
+                if not json_match:
+                    # Tenta lista JSON
+                    json_match = re.search(r'\[\s*\{.*\}\s*\]', response_section, re.DOTALL)
+                if not json_match:
+                    # Último recurso: qualquer JSON
+                    json_match = re.search(r'\{.*\}', response_section, re.DOTALL)
+                
                 if json_match:
                     filtered_output = json_match.group(0)
+                    # Remove delimitadores de código markdown se houver
+                    filtered_output = re.sub(r'```json\s*', '', filtered_output)
+                    filtered_output = re.sub(r'\s*```', '', filtered_output)
+                    # Remove texto antes do JSON
+                    filtered_output = re.sub(r'.*?(\{|\])', r'\1', filtered_output, count=1)
+                    # Remove texto depois do JSON
+                    filtered_output = re.sub(r'(\}|\]).*', r'\1', filtered_output, count=1)
+                    # Substitui vírgula por ponto em números (formato brasileiro)
+                    filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
                 else:
-                    # Se não encontrou JSON, tenta pegar tudo após "Prompt:" e remover tokens
-                    prompt_start = output.find('Prompt:')
-                    if prompt_start >= 0:
-                        # Remove tudo até "Prompt:" e depois remove tokens
-                        filtered_output = output[prompt_start:]
-                        # Remove o prompt formatado (tudo até o último </im_end>)
-                        last_im_end_in_prompt = filtered_output.rfind('</im_end>')
-                        if last_im_end_in_prompt >= 0:
-                            filtered_output = filtered_output[last_im_end_in_prompt + len('</im_end>'):].strip()
-                        filtered_output = re.sub(r'<\|[^|]+\|>', '', filtered_output).strip()
-                    else:
-                        # Último recurso: remove todos os tokens e pega o que sobrar
-                        filtered_output = re.sub(r'<\|[^|]+\|>', '', output).strip()
+                    # Se não encontrou JSON, retorna a resposta limpa
+                    filtered_output = response_section
+            else:
+                # Fallback: procura JSON em todo o output
+                json_match = re.search(r'\{\s*".*":\s*.*\}', output, re.DOTALL)
+                if not json_match:
+                    json_match = re.search(r'\{.*\}', output, re.DOTALL)
+                
+                if json_match:
+                    filtered_output = json_match.group(0)
+                    # Remove delimitadores e limpa
+                    filtered_output = re.sub(r'```json\s*', '', filtered_output)
+                    filtered_output = re.sub(r'\s*```', '', filtered_output)
+                    filtered_output = re.sub(r'.*?(\{)', r'\1', filtered_output, count=1)
+                    filtered_output = re.sub(r'(\}).*', r'\1', filtered_output, count=1)
+                    filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
+                else:
+                    filtered_output = output
             
             log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
             return filtered_output
