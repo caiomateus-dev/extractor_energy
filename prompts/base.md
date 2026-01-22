@@ -36,11 +36,21 @@ REGRAS IMPORTANTES:
 2. valor_fatura: Número float com ponto decimal. Remova "R$" e separadores de milhar. Exemplo: "R$ 1.234,56" vira 1234.56
 3. aliquota_icms: Número (ex: 0, 10, 12, 18, 19, 22, 23, 23,5) ou null se não existir
 4. Booleanos: true ou false (nunca "sim"/"não")
-5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio
+5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio. 
+   CRÍTICO: NUNCA inclua a fatura atual (mes_referencia) nesta lista. Apenas débitos de meses ANTERIORES ao mes_referencia.
+   VALIDAÇÃO OBRIGATÓRIA ANTES DE RETORNAR:
+   - Se TODOS os valores forem iguais (ex: todos 18.0) → valores_em_aberto = []
+   - Se algum valor for igual à aliquota_icms → valores_em_aberto = []
+   - Se contiver o mes_referencia atual → valores_em_aberto = []
+   - Se não encontrar uma seção clara de débitos anteriores na fatura → valores_em_aberto = []
 6. Datas:
-   - mes_referencia: formato "MM/AAAA" (ex: "01/2024")
+   - mes_referencia: formato "MM/AAAA" (ex: "01/2024", "10/2025"). 
+     CRÍTICO: Se a fatura mostrar mês abreviado (ex: "OUT/2025", "SET/2025"), converta para formato numérico:
+     - JAN = 01, FEV = 02, MAR = 03, ABR = 04, MAI = 05, JUN = 06
+     - JUL = 07, AGO = 08, SET = 09, OUT = 10, NOV = 11, DEZ = 12
+     - Exemplo: "OUT/2025" → "10/2025", "SET/2025" → "09/2025"
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
-7. Se houver débitos anteriores: faturas_venc = true e preencha valores_em_aberto
-8. Se não houver débitos: faturas_venc = false e valores_em_aberto = []
+7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
+8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.

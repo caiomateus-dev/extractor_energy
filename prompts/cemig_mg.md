@@ -1,107 +1,129 @@
 Concessionária: CEMIG
 
 ==========================
-ÂNCORAS DE LOCALIZAÇÃO (LAYOUT PADRÃO CEMIG)
+LOCALIZAÇÃO DOS CAMPOS
 ==========================
 
-1. num_instalacao
+1. num_instalacao: Área superior direita, próximo a "Nº da Instalação" ou "N.º DA UNIDADE CONSUMIDORA". 
+   - Formato simples: "3006585726" (8-12 dígitos)
+   - Formato UNIDADE CONSUMIDORA: "11.297.214.018-25" (preserve máscara com pontos e hífen)
+   - NUNCA use código de barras do rodapé (4+ grupos separados por espaços)
 
-- Geralmente aparece como "Instalação", "Nº Instalação" ou "Unidade Consumidora".
-- Costuma estar na área superior direita do documento, junto aos dados da unidade.
+2. classificacao: Próximo a "Classificação" ou "Classe". 
+   - Saída OBRIGATÓRIA em MAIÚSCULAS: RESIDENCIAL, COMERCIAL, INDUSTRIAL, RURAL ou OUTROS
+   - NUNCA use "Residencial" ou "Comercial" (minúsculas). SEMPRE MAIÚSCULAS.
 
-2. classificacao
+3. tipo_instalacao: Próximo a "Tipo de fornecimento". 
+   - Saída OBRIGATÓRIA em MAIÚSCULAS e SEM ACENTO: MONOFASICO, BIFASICO ou TRIFASICO
+   - NUNCA use "Monofásico", "Bifásico" ou "Trifásico". SEMPRE MAIÚSCULAS e SEM ACENTO.
 
-- Normalmente aparece próximo à palavra "Classificação" ou "Classe".
-- Pode vir como: RESIDENCIAL, COMERCIAL, INDUSTRIAL, RURAL, PODER PÚBLICO etc.
+4. mes_referencia: Próximo a "Referência". Formato: "MM/AAAA" (sempre numérico).
+   - Se aparecer formato abreviado (ex: "OUT/2025", "SET/2025"), converta para numérico:
+     - JAN = 01, FEV = 02, MAR = 03, ABR = 04, MAI = 05, JUN = 06
+     - JUL = 07, AGO = 08, SET = 09, OUT = 10, NOV = 11, DEZ = 12
+     - Exemplo: "OUT/2025" → "10/2025", "SET/2025" → "09/2025"
 
-3. tipo_instalacao
+5. vencimento: Próximo a "Vencimento". Formato: "DD/MM/AAAA"
 
-- Normalmente aparece próximo a "Tipo de fornecimento".
-- Exemplos possíveis: MONOFÁSICO, BIFÁSICO, TRIFÁSICO.
+6. proximo_leitura: Próximo a "Próxima Leitura". 
+   - Se aparecer só "DD/MM", complete o ano baseado no mes_referencia
+   - Formato: "DD/MM/AAAA". A data deve ser FUTURA em relação ao mes_referencia
+   - Exemplo: se mes_referencia = "12/2025" e próxima leitura = "13/01", então proximo_leitura = "13/01/2026"
 
-4. mes_referencia
+7. valor_fatura: "Valor a Pagar" ou "Total a Pagar". Remova "R$" e separadores de milhar
 
-- Geralmente aparece próximo de "Referência" ou "Mês/Ano".
-- SEMPRE retornar no formato: "MM/AAAA".
-
-5. vencimento
-
-- Geralmente aparece próximo de "Vencimento".
-- Formato obrigatório: "DD/MM/AAAA".
-
-6. proximo_leitura
-
-- Geralmente aparece próximo de "Próxima Leitura" ou "Próx. Leitura".
-- Muitas vezes aparece apenas como "DD/MM".
-- Nesses casos, você DEVE completar o ano com base no contexto do documento:
-  - Use o mesmo ano do campo mes_referencia se a data fizer sentido cronológico.
-  - Caso contrário, use o ano seguinte.
-
-7. valor_fatura
-
-- Normalmente aparece em destaque no quadro principal como:
-  - "Valor a Pagar", "Total a Pagar" ou equivalente.
-- Remova "R$" e use ponto como separador decimal.
-
-8. aliquota_icms
-
-- Normalmente aparece na área de tributos/ICMS.
-- Deve ser um número válido (ex: 18, 18.5 ou 0).
-- Se encontrar algo que não seja número, isso está errado.
+8. aliquota_icms: Procure em:
+   - Tabela "Itens da fatura" / "Valores Faturados" → coluna "Aliquota ICMS" ou "Alíquota %"
+   - Seção "Reservado ao Fisco" → tabela com coluna "Alíquota (%)" na linha ICMS
+   - Converta "18,00" ou "18.00" para 18.0. Se não encontrar, use null
 
 ==========================
-REGRAS DE FLAGS (BOOLEANS)
+FLAGS BOOLEANAS
 ==========================
 
-baixa_renda:
-
-- Somente true se aparecer EXATAMENTE a expressão "BAIXA RENDA"  
-  na classificação, subclasse ou modalidade tarifária.
-- Caso contrário: false.
-
-ths_verde:
-
-- Somente true se aparecer explicitamente algo como "THS VERDE"  
-  na classe, subclasse ou modalidade tarifária.
-- Caso contrário: false.
-
-tarifa_branca:
-
-- Somente true se aparecer explicitamente "TARIFA BRANCA"  
-  na classificação ou modalidade tarifária.
-- Caso contrário: false.
+- baixa_renda: true apenas se aparecer EXATAMENTE "BAIXA RENDA" na classificação/modalidade
+- ths_verde: true apenas se aparecer explicitamente "THS VERDE"
+- tarifa_branca: true apenas se aparecer explicitamente "TARIFA BRANCA"
+- Caso contrário: false
 
 ==========================
-VALORES EM ABERTO (DÉBITOS ANTERIORES)
+VALORES EM ABERTO
 ==========================
 
-Se houver uma seção ou quadro com título semelhante a:
+REGRA CRÍTICA: valores_em_aberto contém APENAS débitos de meses ANTERIORES ao mes_referencia.
 
-- "REAVISO DE CONTAS VENCIDAS"  
-  ou
-- "DÉBITOS ANTERIORES"
+ATENÇÃO: Na maioria das faturas, a seção de débitos anteriores está VAZIA. Se você não encontrar uma LISTA CLARA de débitos com valores diferentes na seção "REAVISO DE CONTAS VENCIDAS", então valores_em_aberto = [] e faturas_venc = false.
 
-Então:
+EXEMPLO DE ERRO GRAVE (NUNCA FAÇA ISSO):
+- Se você retornar valores_em_aberto com todos os valores iguais (ex: todos 18.0) → ERRADO
+- Se você retornar valores_em_aberto com valores iguais à aliquota_icms → ERRADO  
+- Se você retornar valores_em_aberto incluindo o mes_referencia atual → ERRADO
+- Se você retornar valores_em_aberto sem encontrar uma lista clara na seção de débitos → ERRADO
 
-- Para cada linha encontrada, extraia:
-  - mes_ano no formato "MM/AAAA"
-  - valor como float (sem R$, sem separador de milhar)
+Se você tiver qualquer dúvida, retorne valores_em_aberto = [] e faturas_venc = false.
 
-Se NÃO houver essa seção:
+ONDE PROCURAR:
+- Procure APENAS na seção "REAVISO DE CONTAS VENCIDAS" ou "DÉBITOS ANTERIORES" ou "NOTIFICAÇÃO DE DÉBITO(S)"
+- Esta seção geralmente aparece no meio ou rodapé da fatura
+- NUNCA use valores de outras seções da fatura (como aliquota_icms, valores faturados, tabelas de consumo, etc.)
+- NUNCA invente valores se a seção não existir ou estiver vazia
 
-- valores_em_aberto = []
-- faturas_venc = false
+VALIDAÇÃO OBRIGATÓRIA - SIGA ESTES PASSOS EM ORDEM:
 
-Se houver ao menos um débito listado:
+PASSO 1: LOCALIZE a seção "REAVISO DE CONTAS VENCIDAS" ou "DÉBITOS ANTERIORES" na fatura
+- Se NÃO encontrar essa seção → valores_em_aberto = [], faturas_venc = false → PARE AQUI
 
-- faturas_venc = true
+PASSO 2: VERIFIQUE se a seção está VAZIA:
+- Se a seção existir mas não tiver NENHUMA linha de débito listada (apenas o título, sem valores abaixo)
+- Se a seção estiver em branco ou com padrão hachurado
+- Se não houver nenhum mês/ano e valor listados na seção
+- Se a seção mostrar apenas o título mas sem conteúdo abaixo
+- Se você não conseguir identificar claramente linhas de débitos com mês/ano e valor
+- Se você ver apenas o título da seção mas sem uma TABELA ou LISTA de débitos abaixo
+→ valores_em_aberto = []
+→ faturas_venc = false
+→ PARE AQUI, não procure valores em outras partes da fatura
+→ NUNCA invente ou copie valores de outras seções (aliquota_icms, valores faturados, etc.)
 
+PASSO 3: Se a seção tiver DÉBITOS LISTADOS (com linhas contendo mês/ano e valor):
+   → Para cada linha de débito EXPLICITAMENTE listada na seção:
+     - mes_ano: formato "MM/AAAA" (deve aparecer na linha do débito)
+     - valor: número float do valor do débito em R$ (deve aparecer na mesma linha)
+   → VALIDAÇÃO CRÍTICA: O valor deve ser um valor de FATURA (geralmente dezenas ou centenas de reais)
+   → VALIDAÇÃO CRÍTICA: O valor NUNCA pode ser igual à aliquota_icms (ex: se aliquota_icms = 18.0, então NUNCA use 18.0)
+   → VALIDAÇÃO CRÍTICA: O valor NUNCA pode ser o mesmo para todos os meses (isso indica que está copiando valor errado)
+   → Compare mes_ano com mes_referencia:
+     - Se forem IGUAIS → IGNORE completamente (é a fatura atual)
+     - Se for ANTERIOR → adicione em valores_em_aberto
+     - Se for FUTURO → IGNORE
+   → Se houver ao menos um débito anterior válido → faturas_venc = true
+   → Se todos forem da fatura atual ou nenhum válido → valores_em_aberto = [], faturas_venc = false
+
+VALIDAÇÃO FINAL OBRIGATÓRIA - ANTES DE RETORNAR O JSON, VERIFIQUE:
+
+1. Se você não encontrou uma seção "REAVISO DE CONTAS VENCIDAS" ou "DÉBITOS ANTERIORES" com uma LISTA CLARA de débitos → valores_em_aberto = [] e faturas_venc = false
+
+2. Se a seção existir mas estiver VAZIA (sem linhas de débitos) → valores_em_aberto = [] e faturas_venc = false
+
+3. Se TODOS os valores em valores_em_aberto forem iguais entre si (ex: todos 18.0, todos 10.0) → valores_em_aberto = [] e faturas_venc = false (isso indica erro)
+
+4. Se algum valor em valores_em_aberto for igual à aliquota_icms → valores_em_aberto = [] e faturas_venc = false (isso indica que você copiou valor errado)
+
+5. Se valores_em_aberto contiver o mes_referencia atual → valores_em_aberto = [] e faturas_venc = false (isso está ERRADO)
+
+6. Se você não tiver CERTEZA ABSOLUTA de que encontrou débitos anteriores válidos na seção correta → valores_em_aberto = [] e faturas_venc = false
+
+REGRA ABSOLUTA:
+- Na dúvida, retorne valores_em_aberto = [] e faturas_venc = false
+- É melhor retornar vazio do que retornar valores errados
+- NUNCA invente valores
+- NUNCA copie valores de outras seções (aliquota_icms, valores faturados, tabelas, etc.)
+
+OUTRAS REGRAS
 ==========================
-OUTRAS REGRAS GERAIS (CEMIG)
-==========================
 
-- distribuidora: sempre "CEMIG".
-- tensao_nominal: procurar por "Tensão Nominal" ou "Tensão".
-- tipo_instalacao e classificacao normalmente aparecem próximos no mesmo bloco visual.
-- NÃO invente valores.  
-  Se não encontrar um campo, use string vazia ("") ou null conforme o tipo.
+- distribuidora: sempre "CEMIG"
+- tensao_nominal: procurar por "Tensão Nominal" ou "Tensão"
+- cod_cliente: sempre null
+- conta_contrato: sempre null
+- NÃO invente valores. Se não encontrar, use "" ou null conforme o tipo
