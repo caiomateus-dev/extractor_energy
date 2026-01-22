@@ -46,6 +46,11 @@ REGRAS IMPORTANTES:
 4. Booleanos: true ou false (nunca "sim"/"não")
 5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio. 
    CRÍTICO: NUNCA inclua a fatura atual (mes_referencia) nesta lista. Apenas débitos de meses ANTERIORES ao mes_referencia.
+   VALIDAÇÃO OBRIGATÓRIA ANTES DE RETORNAR:
+   - Se TODOS os valores forem iguais (ex: todos 18.0) → valores_em_aberto = []
+   - Se algum valor for igual à aliquota_icms → valores_em_aberto = []
+   - Se contiver o mes_referencia atual → valores_em_aberto = []
+   - Se não encontrar uma seção clara de débitos anteriores na fatura → valores_em_aberto = []
 6. Datas:
    - mes_referencia: formato "MM/AAAA" (ex: "01/2024")
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
