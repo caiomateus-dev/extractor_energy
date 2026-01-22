@@ -474,7 +474,17 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 max_tokens=settings.max_tokens,
                 temperature=settings.temperature,
             )
-            return result
+            # MLX-VLM pode retornar GenerationResult ou string diretamente
+            # Extrai o texto em ambos os casos
+            if hasattr(result, 'text'):
+                return result.text
+            elif hasattr(result, '__str__'):
+                return str(result)
+            elif isinstance(result, str):
+                return result
+            else:
+                # Tenta converter para string
+                return str(result)
         finally:
             # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
             _clear_metal_cache()
@@ -563,6 +573,18 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
         _clear_metal_cache()
         gc.collect()
 
+    # Garante que result_text é uma string
+    if result_text is None:
+        result_text = ""
+    elif not isinstance(result_text, str):
+        # Se for um objeto (como GenerationResult), extrai o texto
+        if hasattr(result_text, 'text'):
+            result_text = result_text.text
+        elif hasattr(result_text, '__str__'):
+            result_text = str(result_text)
+        else:
+            result_text = str(result_text)
+    
     # Log da resposta bruta do modelo para debug
     log(f"[infer] resposta bruta (primeiros 500 chars): {result_text[:500] if result_text else 'None'}")
     
