@@ -321,14 +321,56 @@ def _load_image(raw: bytes) -> Image.Image:
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
+    """Extrai JSON do texto, removendo mensagens de deprecação e outros textos extras"""
     text = text.strip()
+    
+    # Remove linhas com mensagens de deprecação ou avisos
+    lines = text.split('\n')
+    filtered_lines = []
+    skip_until_json = False
+    for line in lines:
+        line_lower = line.lower()
+        # Pula linhas de deprecação, avisos, ou separadores
+        if any(x in line_lower for x in ['deprecated', 'calling', 'python -m', '==========', 'files:', 'prompt:']):
+            skip_until_json = True
+            continue
+        # Se encontrou uma chave JSON, para de pular
+        if '{' in line or '[' in line:
+            skip_until_json = False
+        if not skip_until_json:
+            filtered_lines.append(line)
+    
+    text = '\n'.join(filtered_lines).strip()
+    
+    # Tenta encontrar JSON válido
+    # Primeiro tenta objeto JSON completo
     if text.startswith("{") and text.endswith("}"):
-        return json.loads(text)
-
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        raise ValueError("Nenhum JSON encontrado na resposta do modelo.")
-    return json.loads(m.group(0))
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    
+    # Procura por objeto JSON no texto
+    m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    
+    # Procura por qualquer JSON válido (mais permissivo)
+    m = re.search(r'\{.*\}', text, re.DOTALL)
+    if m:
+        json_str = m.group(0)
+        # Tenta limpar vírgulas finais e outros problemas comuns
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Nenhum JSON válido encontrado na resposta. Erro: {e}. Texto: {text[:500]}")
+    
+    raise ValueError(f"Nenhum JSON encontrado na resposta do modelo. Texto: {text[:500]}")
 
 
 def _to_float(x: Any, default: float) -> float:
@@ -754,52 +796,49 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     result_customer = None
     result_consumption = None
     
-    # _GATE garante que uma requisição completa suas 3 inferências antes de outra começar
-    # Isso evita intercalação de inferências entre requisições diferentes
-    # Com múltiplos workers, cada worker pode processar uma requisição por vez
-    async with _GATE:
-        # Inferência 1: Imagem completa (dados gerais)
+    # Sem _GATE - cada subprocess é independente e pode rodar em paralelo
+    # Inferência 1: Imagem completa (dados gerais)
+    try:
+        t_infer1_start = time.time()
+        log("[infer] iniciando inferência imagem completa")
+        result_full = await _infer_one(img, prompt_full)
+        t_infer1_end = time.time()
+        log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
+    except Exception as e:
+        log(f"[infer] erro na inferência imagem completa: {e}")
+        result_full = None
+    
+    # Inferência 2: Recorte cliente/endereço
+    if customer_crop_img is not None:
         try:
-            t_infer1_start = time.time()
-            log("[infer] iniciando inferência imagem completa")
-            result_full = await _infer_one(img, prompt_full)
-            t_infer1_end = time.time()
-            log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
+            t_infer2_start = time.time()
+            log("[infer] iniciando inferência recorte cliente/endereço")
+            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+            result_customer = await _infer_one(customer_crop_img, prompt_customer)
+            t_infer2_end = time.time()
+            log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
         except Exception as e:
-            log(f"[infer] erro na inferência imagem completa: {e}")
-            result_full = None
-        
-        # Inferência 2: Recorte cliente/endereço
-        if customer_crop_img is not None:
-            try:
-                t_infer2_start = time.time()
-                log("[infer] iniciando inferência recorte cliente/endereço")
-                prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-                result_customer = await _infer_one(customer_crop_img, prompt_customer)
-                t_infer2_end = time.time()
-                log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
-            except Exception as e:
-                log(f"[infer] erro na inferência cliente/endereço: {e}")
-                result_customer = None
-        else:
+            log(f"[infer] erro na inferência cliente/endereço: {e}")
             result_customer = None
-        
-        # Inferência 3: Recorte consumo
-        if consumption_crop_img is not None:
-            try:
-                t_infer3_start = time.time()
-                log("[infer] iniciando inferência recorte consumo")
-                prompt_consumption = _read_consumption_prompt()
-                result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
-                t_infer3_end = time.time()
-                log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
-            except Exception as e:
-                log(f"[infer] erro na inferência consumo: {e}")
-                result_consumption = None
-        else:
+    else:
+        result_customer = None
+    
+    # Inferência 3: Recorte consumo
+    if consumption_crop_img is not None:
+        try:
+            t_infer3_start = time.time()
+            log("[infer] iniciando inferência recorte consumo")
+            prompt_consumption = _read_consumption_prompt()
+            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+            t_infer3_end = time.time()
+            log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
+        except Exception as e:
+            log(f"[infer] erro na inferência consumo: {e}")
             result_consumption = None
+    else:
+        result_consumption = None
     
     # Limpa imagens da memória (fora do _GATE para não bloquear outras requisições)
     if img is not None:
