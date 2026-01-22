@@ -379,6 +379,63 @@ def _to_float(x: Any, default: float) -> float:
         return default
 
 
+def _normalize_month_reference(mes_ref: str) -> str:
+    """Converte mes_referencia de formato abreviado (OUT/2025) para numérico (10/2025)"""
+    if not mes_ref or not isinstance(mes_ref, str):
+        return mes_ref
+    
+    mes_ref = mes_ref.strip().upper()
+    
+    # Mapeamento de meses abreviados para numéricos
+    month_map = {
+        "JAN": "01", "FEV": "02", "MAR": "03", "ABR": "04",
+        "MAI": "05", "JUN": "06", "JUL": "07", "AGO": "08",
+        "SET": "09", "OUT": "10", "NOV": "11", "DEZ": "12"
+    }
+    
+    # Verifica se já está no formato numérico (MM/AAAA)
+    if re.match(r'^\d{2}/\d{4}$', mes_ref):
+        return mes_ref
+    
+    # Tenta converter formato abreviado (OUT/2025 ou OUT/25)
+    parts = mes_ref.split("/")
+    if len(parts) == 2:
+        mes_abrev = parts[0].strip()
+        ano = parts[1].strip()
+        
+        # Converte ano de 2 dígitos para 4 dígitos se necessário
+        if len(ano) == 2:
+            ano_int = int(ano)
+            # Assume que anos 00-50 são 2000-2050, e 51-99 são 1951-1999
+            if ano_int <= 50:
+                ano = f"20{ano:02d}"
+            else:
+                ano = f"19{ano:02d}"
+        
+        # Converte mês abreviado para numérico
+        if mes_abrev in month_map:
+            return f"{month_map[mes_abrev]}/{ano}"
+    
+    # Se não conseguir converter, retorna o original
+    return mes_ref
+
+
+def _normalize_cep(cep: str) -> str:
+    """Normaliza CEP para o formato XX.XXX-XXX"""
+    if not cep or not isinstance(cep, str):
+        return cep
+    
+    # Remove todos os caracteres não numéricos
+    cep_clean = re.sub(r'[^\d]', '', cep.strip())
+    
+    # Verifica se tem 8 dígitos
+    if len(cep_clean) == 8:
+        return f"{cep_clean[:2]}.{cep_clean[2:5]}-{cep_clean[5:]}"
+    
+    # Se não tiver 8 dígitos, retorna o original
+    return cep
+
+
 def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict[str, Any]:
     template: Dict[str, Any] = {
         "cod_cliente": "",
@@ -422,6 +479,16 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
 
     if not str(out.get("distribuidora", "")).strip():
         out["distribuidora"] = concessionaria_input
+
+    # Normaliza mes_referencia para formato numérico
+    mes_ref = str(out.get("mes_referencia", "")).strip()
+    if mes_ref:
+        out["mes_referencia"] = _normalize_month_reference(mes_ref)
+
+    # Normaliza CEP para formato XX.XXX-XXX
+    cep = str(out.get("cep", "")).strip()
+    if cep:
+        out["cep"] = _normalize_cep(cep)
 
     out["valor_fatura"] = _to_float(out["valor_fatura"], 0.0)
 

@@ -44,7 +44,11 @@ REGRAS IMPORTANTES:
    - Se contiver o mes_referencia atual → valores_em_aberto = []
    - Se não encontrar uma seção clara de débitos anteriores na fatura → valores_em_aberto = []
 6. Datas:
-   - mes_referencia: formato "MM/AAAA" (ex: "01/2024")
+   - mes_referencia: formato "MM/AAAA" (ex: "01/2024", "10/2025"). 
+     CRÍTICO: Se a fatura mostrar mês abreviado (ex: "OUT/2025", "SET/2025"), converta para formato numérico:
+     - JAN = 01, FEV = 02, MAR = 03, ABR = 04, MAI = 05, JUN = 06
+     - JUL = 07, AGO = 08, SET = 09, OUT = 10, NOV = 11, DEZ = 12
+     - Exemplo: "OUT/2025" → "10/2025", "SET/2025" → "09/2025"
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []

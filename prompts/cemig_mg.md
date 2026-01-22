@@ -17,7 +17,11 @@ LOCALIZAÇÃO DOS CAMPOS
    - Saída OBRIGATÓRIA em MAIÚSCULAS e SEM ACENTO: MONOFASICO, BIFASICO ou TRIFASICO
    - NUNCA use "Monofásico", "Bifásico" ou "Trifásico". SEMPRE MAIÚSCULAS e SEM ACENTO.
 
-4. mes_referencia: Próximo a "Referência". Formato: "MM/AAAA"
+4. mes_referencia: Próximo a "Referência". Formato: "MM/AAAA" (sempre numérico).
+   - Se aparecer formato abreviado (ex: "OUT/2025", "SET/2025"), converta para numérico:
+     - JAN = 01, FEV = 02, MAR = 03, ABR = 04, MAI = 05, JUN = 06
+     - JUL = 07, AGO = 08, SET = 09, OUT = 10, NOV = 11, DEZ = 12
+     - Exemplo: "OUT/2025" → "10/2025", "SET/2025" → "09/2025"
 
 5. vencimento: Próximo a "Vencimento". Formato: "DD/MM/AAAA"
 
