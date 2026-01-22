@@ -381,6 +381,7 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
         "bairro": "",
         "cidade": "",
         "estado": "",
+        "cep": "",
     }
 
     out = dict(template)

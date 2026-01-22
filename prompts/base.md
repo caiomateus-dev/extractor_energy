@@ -34,7 +34,8 @@ Formato do JSON esperado (todas as chaves são obrigatórias):
   "complemento": "",
   "bairro": "",
   "cidade": "",
-  "estado": ""
+  "estado": "",
+  "cep": ""
 }
 
 REGRAS IMPORTANTES:
@@ -57,5 +58,6 @@ REGRAS IMPORTANTES:
    - bairro: Nome do bairro
    - cidade: Nome da cidade
    - estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP")
+   - cep: CEP do endereço no formato "00000-000" ou "00000000" (com ou sem hífen)
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
