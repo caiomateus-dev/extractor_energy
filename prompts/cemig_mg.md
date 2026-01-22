@@ -13,11 +13,13 @@ Concessionária: CEMIG
 
 - Normalmente aparece próximo à palavra "Classificação" ou "Classe".
 - Pode vir como: RESIDENCIAL, COMERCIAL, INDUSTRIAL, RURAL, PODER PÚBLICO etc.
+- Saída OBRIGATORIA: RESIDENCIAL, COMERCIAL, INDUSTRIAL, RURAL ou OUTROS
 
 3. tipo_instalacao
 
 - Normalmente aparece próximo a "Tipo de fornecimento".
 - Exemplos possíveis: MONOFÁSICO, BIFÁSICO, TRIFÁSICO.
+- Saída OBRIGATORIA: MONOFASICO, BIFASICO, TRIFASICO
 
 4. mes_referencia
 
@@ -105,3 +107,33 @@ OUTRAS REGRAS GERAIS (CEMIG)
 - tipo_instalacao e classificacao normalmente aparecem próximos no mesmo bloco visual.
 - NÃO invente valores.  
   Se não encontrar um campo, use string vazia ("") ou null conforme o tipo.
+
+==========================
+DADOS DO CLIENTE E ENDEREÇO
+==========================
+
+1. nome_cliente
+
+- Geralmente aparece no topo da fatura, na área superior esquerda.
+- É o nome completo do titular da conta de energia.
+- Exemplo: "DORA LUCIA FERNANDES"
+
+2. Endereço completo
+
+Os dados de endereço geralmente aparecem logo abaixo ou ao lado do nome do cliente:
+
+- rua: Nome da rua, avenida ou logradouro
+- numero: Número do endereço
+- complemento: Complemento como apartamento, bloco, sala, etc. Use "" se não houver
+- bairro: Nome do bairro 
+- cidade: Nome da cidade
+- estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG")
+
+IMPORTANTE: Separe corretamente rua e número. O número geralmente vem após o nome da rua.
+
+=======================
+OBRIGATORIO
+=======================
+
+- cod_cliente: sempre null
+- conta_contrato: sempre null

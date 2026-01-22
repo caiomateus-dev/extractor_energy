@@ -374,6 +374,13 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
         "ths_verde": False,
         "faturas_venc": False,
         "valores_em_aberto": [],
+        "nome_cliente": "",
+        "rua": "",
+        "numero": "",
+        "complemento": "",
+        "bairro": "",
+        "cidade": "",
+        "estado": "",
     }
 
     out = dict(template)
