@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import io
 import json
 import os
@@ -182,12 +183,50 @@ def _metal_memory_bytes() -> Dict[str, int]:
     return out
 
 
+def _clear_metal_cache() -> None:
+    """
+    Tenta limpar memória do Metal/MLX após inferência.
+    Baseado na documentação oficial do MLX, não há uma função clear_cache(),
+    mas podemos forçar avaliação de arrays pendentes e sincronização.
+    
+    Nota: Há problemas conhecidos de vazamento de memória no MLX-VLM
+    relacionados ao KV cache não ser limpo entre gerações.
+    """
+    try:
+        import mlx.core as mx  # type: ignore
+        
+        # Força avaliação de arrays pendentes se o modelo estiver carregado
+        # Isso ajuda a liberar memória de arrays intermediários
+        global MODEL
+        if MODEL is not None and hasattr(MODEL, "parameters"):
+            try:
+                # Avalia parâmetros do modelo para sincronizar operações
+                params = MODEL.parameters()
+                if isinstance(params, dict):
+                    # Avalia todos os parâmetros do modelo
+                    mx.eval(list(params.values()))
+            except Exception:
+                pass
+        
+        # Tenta limpar cache se disponível (pode não existir em todas as versões)
+        metal = getattr(mx, "metal", None)
+        if metal is not None:
+            if hasattr(metal, "clear_cache"):
+                try:
+                    metal.clear_cache()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def _log_system_metrics(tag: str) -> None:
     rss = _process_rss_bytes()
     total, avail = _system_memory_total_available_bytes()
     metal = _metal_memory_bytes()
     metal_total = metal.get("memory_size")
     metal_active = metal.get("active")
+    metal_wset = metal.get("recommended_max_working_set_size")
     metal_avail = None
     if isinstance(metal_total, int) and isinstance(metal_active, int):
         metal_avail = max(0, metal_total - metal_active)
@@ -196,7 +235,7 @@ def _log_system_metrics(tag: str) -> None:
         f"ram_total={_format_bytes(total)} ram_avail={_format_bytes(avail)} "
         f"metal_active={_format_bytes(metal_active)} metal_peak={_format_bytes(metal.get('peak'))} "
         f"metal_cache={_format_bytes(metal.get('cache'))} metal_total={_format_bytes(metal_total)} "
-        f"metal_avail~={_format_bytes(metal_avail)}"
+        f"metal_avail~={_format_bytes(metal_avail)} metal_wset={_format_bytes(metal_wset)}"
     )
 
 
@@ -258,15 +297,28 @@ def _read_prompt(concessionaria: str, uf: str) -> str:
 
 
 def _load_image(raw: bytes) -> Image.Image:
-    img = Image.open(io.BytesIO(raw)).convert("RGB")
-
-    w, h = img.size
+    """
+    Carrega e processa imagem de forma eficiente em memória.
+    Redimensiona se necessário para evitar alocações excessivas.
+    """
+    # Carrega imagem diretamente do bytes
+    bio = io.BytesIO(raw)
+    try:
+        img = Image.open(bio).convert("RGB")
+        # Cria uma cópia para garantir que o BytesIO possa ser fechado
+        img_copy = img.copy()
+        img.close()  # Fecha a imagem original
+    finally:
+        bio.close()  # Fecha o BytesIO
+    
+    w, h = img_copy.size
     if w * h > settings.max_pixels:
         scale = (settings.max_pixels / float(w * h)) ** 0.5
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
-        img = img.resize((nw, nh))
-
-    return img
+        # Redimensiona diretamente na cópia
+        img_copy = img_copy.resize((nw, nh), Image.Resampling.LANCZOS)
+    
+    return img_copy
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -371,15 +423,22 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     loop = asyncio.get_running_loop()
 
     def _run() -> str:
-        return generate(
-            MODEL,
-            PROCESSOR,
-            formatted_prompt,
-            images,
-            verbose=False,
-            max_tokens=settings.max_tokens,
-            temperature=settings.temperature,
-        )
+        try:
+            result = generate(
+                MODEL,
+                PROCESSOR,
+                formatted_prompt,
+                images,
+                verbose=False,
+                max_tokens=settings.max_tokens,
+                temperature=settings.temperature,
+            )
+            return result
+        finally:
+            # Limpa cache do Metal após inferência
+            _clear_metal_cache()
+            # Força garbage collection
+            gc.collect()
 
     return await asyncio.wait_for(
         loop.run_in_executor(None, _run),
@@ -424,8 +483,12 @@ async def extract_energy(
     if len(raw) > settings.max_image_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"imagem acima do limite de {settings.max_image_mb}MB")
 
+    img = None
     try:
         img = _load_image(raw)
+        # Libera os bytes da imagem imediatamente após carregar
+        del raw
+        gc.collect()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"falha ao abrir imagem: {e}")
 
@@ -434,13 +497,23 @@ async def extract_energy(
 
     t0 = time.time()
 
-    async with _GATE:
-        try:
-            result_text = await _infer_one(img, prompt)
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="timeout na inferência do modelo")
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"erro na inferência: {e}")
+    result_text = None
+    try:
+        async with _GATE:
+            try:
+                result_text = await _infer_one(img, prompt)
+            except asyncio.TimeoutError:
+                raise HTTPException(status_code=504, detail="timeout na inferência do modelo")
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"erro na inferência: {e}")
+    finally:
+        # Limpa a imagem da memória imediatamente após inferência
+        if img is not None:
+            img.close()
+            del img
+        # Limpa cache do Metal e força garbage collection
+        _clear_metal_cache()
+        gc.collect()
 
     try:
         payload = _extract_json(result_text)
