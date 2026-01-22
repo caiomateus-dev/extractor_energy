@@ -468,8 +468,8 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
     return out
 
 
-def _create_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str:
-    """Cria prompt específico para extração de nome do cliente e endereço"""
+def _read_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str:
+    """Carrega prompt específico para extração de nome do cliente e endereço"""
     # Carrega regras específicas da concessionária se disponível
     spec_prompt = ""
     try:
@@ -506,34 +506,11 @@ def _create_customer_address_prompt(concessionaria: str = "", uf: str = "") -> s
     except Exception:
         pass
     
-    base_prompt = """Analise esta imagem que contém APENAS o nome do cliente e endereço de uma fatura de energia.
-
-RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
-
-Formato do JSON esperado:
-{
-  "nome_cliente": "",
-  "rua": "",
-  "numero": "",
-  "complemento": "",
-  "bairro": "",
-  "cidade": "",
-  "estado": "",
-  "cep": ""
-}
-
-REGRAS GERAIS:
-- nome_cliente: Nome completo do cliente
-- rua: Nome da rua/avenida SEM o número. Se encontrar "RUA EXEMPLO 140", coloque apenas "RUA EXEMPLO" no campo rua
-- numero: Número do endereço (apenas o número). Se encontrar "RUA EXEMPLO 140", coloque "140" no campo numero
-- complemento: Complemento do endereço (apto, bloco, etc.) ou "" se não houver
-- bairro: Nome do bairro
-- cidade: Nome da cidade
-- estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP")
-- cep: CEP do endereço no formato "00000-000" ou "00000000" (com ou sem hífen)
-
-IMPORTANTE: Esta imagem contém APENAS dados do cliente. NÃO inclua dados da distribuidora.
-Se não encontrar algum campo, use "" (string vazia)."""
+    base_path = PROMPTS_DIR / "customer_address.md"
+    if not base_path.exists():
+        raise RuntimeError(f"Arquivo {base_path.as_posix()} não encontrado.")
+    
+    base_prompt = base_path.read_text(encoding="utf-8").strip()
     
     if spec_prompt:
         return f"""{base_prompt}
@@ -544,28 +521,12 @@ REGRAS ESPECÍFICAS DA CONCESSIONÁRIA:
     return base_prompt
 
 
-def _create_consumption_prompt() -> str:
-    """Cria prompt específico para extração de consumo médio"""
-    return """Analise esta imagem que contém APENAS dados de consumo médio de uma fatura de energia.
-
-RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
-
-Formato do JSON esperado:
-{
-  "consumo_lista": [
-    {"mes_ano": "MM/AAAA", "consumo": 123},
-    {"mes_ano": "MM/AAAA", "consumo": 456}
-  ]
-}
-
-REGRAS:
-- consumo_lista: Lista de objetos com histórico de consumo mensal
-- mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
-- consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
-- Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
-
-IMPORTANTE: Extraia APENAS os valores de consumo mensal que aparecem na imagem.
-Cada entrada deve ter um mês/ano e o consumo correspondente em kWh (número inteiro)."""
+def _read_consumption_prompt() -> str:
+    """Carrega prompt específico para extração de consumo médio"""
+    path = PROMPTS_DIR / "consumption.md"
+    if not path.exists():
+        raise RuntimeError(f"Arquivo {path.as_posix()} não encontrado.")
+    return path.read_text(encoding="utf-8").strip()
 
 
 async def _infer_one(img: Image.Image, prompt_text: str) -> str:
@@ -763,7 +724,7 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             if customer_crop_img is not None:
                 try:
                     log("[infer] iniciando inferência recorte cliente/endereço")
-                    prompt_customer = _create_customer_address_prompt(concessionaria, uf)
+                    prompt_customer = _read_customer_address_prompt(concessionaria, uf)
                     result_customer = await _infer_one(customer_crop_img, prompt_customer)
                 except Exception as e:
                     log(f"[infer] erro na inferência cliente/endereço: {e}")
@@ -773,7 +734,7 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             if consumption_crop_img is not None:
                 try:
                     log("[infer] iniciando inferência recorte consumo")
-                    prompt_consumption = _create_consumption_prompt()
+                    prompt_consumption = _read_consumption_prompt()
                     result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
                 except Exception as e:
                     log(f"[infer] erro na inferência consumo: {e}")
