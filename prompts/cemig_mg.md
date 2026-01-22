@@ -119,25 +119,60 @@ REGRA ABSOLUTA:
 ENDEREÇO DO CLIENTE
 ==========================
 
-REGRA ABSOLUTA: Extraia APENAS o endereço que está na mesma área visual do nome do cliente. IGNORE endereço da CEMIG (aparece próximo ao logo/título no topo).
+REGRA ABSOLUTA CRÍTICA: Extraia APENAS o endereço que está na mesma área visual do nome do cliente. IGNORE COMPLETAMENTE o endereço da CEMIG.
 
-COMO IDENTIFICAR:
-- Nome do cliente aparece no topo esquerdo
-- Endereço do cliente está logo abaixo/ao lado do nome, formando bloco visual único
-- Endereço da CEMIG aparece separado, próximo ao logo (ex: "BELO HORIZONTE", "SANTO AGOSTINHO", CEP "30190-131")
+ONDE ESTÁ O ENDEREÇO DO CLIENTE:
+- Nome do cliente aparece no TOPO ESQUERDO da fatura, logo abaixo do logo grande "CEMIG"
+- Endereço do cliente está LOGO ABAIXO do nome do cliente, formando um BLOCO VISUAL ÚNICO
+- Este endereço do cliente está na ÁREA ESQUERDA da fatura
 
-CAMPOS (extrair APENAS da área do nome do cliente):
-- rua: Nome da rua SEM o número. Se encontrar "RUA EXEMPLO 140", extraia apenas "RUA EXEMPLO". 
+ONDE ESTÁ O ENDEREÇO DA CEMIG (IGNORE COMPLETAMENTE):
+- Endereço da CEMIG aparece no TOPO DIREITO da fatura
+- Está próximo ao texto "DOCUMENTO AUXILIAR DA NOTA FISCAL DE ENERGIA ELÉTRICA ELETRONICA"
+- Contém informações como "CEMIG DISTRIBUIÇÃO S.A."
+- Contém endereço como "AV. BARBACENA", "SANTO AGOSTINHO", "BELO HORIZONTE", CEP "30190-131"
+- Este endereço da CEMIG está na ÁREA DIREITA da fatura, SEPARADO do nome do cliente
+
+VALIDAÇÃO OBRIGATÓRIA ANTES DE EXTRAIR:
+1. LOCALIZE o nome do cliente no TOPO ESQUERDO da fatura
+2. VERIFIQUE se o endereço que você vai extrair está LOGO ABAIXO ou AO LADO do nome do cliente (mesma área visual)
+3. Se o endereço estiver no TOPO DIREITO, próximo a "CEMIG DISTRIBUIÇÃO" ou "DOCUMENTO AUXILIAR" → É DA CEMIG, NÃO USE
+4. Se o endereço contiver "AV. BARBACENA", "SANTO AGOSTINHO", "BELO HORIZONTE", CEP "30190-131" → É DA CEMIG, NÃO USE
+
+CAMPOS (extrair APENAS da área ESQUERDA, abaixo do nome do cliente):
+- rua: Nome da rua SEM o número. Se encontrar "CORREGO AREAO 99999", extraia apenas "CORREGO AREAO". 
   O número vai separado no campo "numero". NUNCA inclua o número no campo rua.
-- numero: Número do endereço (apenas o número, sem a rua). Exemplo: se encontrar "RUA EXEMPLO 140", 
-  então rua = "RUA EXEMPLO" e numero = "140"
+- numero: Número do endereço (apenas o número, sem a rua). Exemplo: se encontrar "CORREGO AREAO 99999", 
+  então rua = "CORREGO AREAO" e numero = "99999"
 - complemento: Apto, bloco, caixa postal, etc. Use "" se não houver
-- bairro: Nome do bairro (linha separada entre rua e cidade). Exemplo: "SEVERINA I", "OLIVEIRAS", "AREA RURAL"
-- cidade: Nome da cidade na última linha do endereço, antes do estado. Exemplo: "DIVINOPOLIS", "RIBEIRÃO DAS NEVES"
+- bairro: Nome do bairro (linha separada entre rua e cidade). Exemplo: "AREA RURAL", "OLIVEIRAS"
+- cidade: Nome da cidade na última linha do endereço, antes do estado. Exemplo: "MONTEZUMA", "DIVINOPOLIS"
 - estado: Sigla 2 letras após cidade. Exemplo: "MG"
 - cep: Formato "00000-000" ou "00000000", geralmente na mesma linha da cidade/estado
 
-VALIDAÇÃO: Antes de preencher qualquer campo, verifique se está na mesma área do nome do cliente. Se estiver em área separada (próximo ao logo CEMIG), é dado da distribuidora - NÃO USE.
+REGRA FINAL - LEIA COM MUITA ATENÇÃO:
+- Se você tiver DÚVIDA sobre qual endereço usar → Use APENAS o endereço que está na ÁREA ESQUERDA, abaixo do nome do cliente
+- NUNCA use endereço que esteja na ÁREA DIREITA da fatura
+- NUNCA use endereço que contenha "CEMIG DISTRIBUIÇÃO" ou "DOCUMENTO AUXILIAR"
+- NUNCA use endereço que contenha "AV. BARBACENA", "SANTO AGOSTINHO", "BELO HORIZONTE", CEP "30190-131"
+- Se você encontrar "CEMIG DISTRIBUIÇÃO S.A." próximo ao endereço → É DA CEMIG, NÃO USE
+- Se você encontrar "17º ANDAR" ou "ALA 1" no endereço → É DA CEMIG, NÃO USE
+- O endereço do cliente está SEMPRE na mesma área visual do nome do cliente (topo esquerdo)
+- O endereço da CEMIG está SEMPRE separado, no topo direito, próximo a textos administrativos
+
+VALIDAÇÃO FINAL ANTES DE RETORNAR:
+Antes de preencher rua, numero, bairro, cidade, estado, cep:
+1. Verifique se o endereço está na ÁREA ESQUERDA da fatura, abaixo do nome do cliente
+2. Se o endereço estiver na ÁREA DIREITA → NÃO USE, é da CEMIG
+3. Se o endereço contiver qualquer referência a "CEMIG DISTRIBUIÇÃO", "DOCUMENTO AUXILIAR", "AV. BARBACENA", "SANTO AGOSTINHO", "BELO HORIZONTE", CEP "30190-131" → NÃO USE, é da CEMIG
+4. Se o endereço contiver "17º ANDAR", "ALA 1", "1200" (número do prédio da CEMIG) → NÃO USE, é da CEMIG
+5. Se você não tiver CERTEZA → Use apenas o endereço que está na área esquerda, abaixo do nome do cliente
+
+EXEMPLO DE ERRO GRAVE (NUNCA FAÇA ISSO):
+- Se você extrair cidade = "BELO HORIZONTE" e bairro = "SANTO AGOSTINHO" → ERRADO, isso é da CEMIG
+- Se você extrair rua = "AV. BARBACENA" → ERRADO, isso é da CEMIG
+- Se você extrair cep = "30190-131" → ERRADO, isso é da CEMIG
+- O endereço correto do cliente está SEMPRE na área esquerda, abaixo do nome do cliente
 
 ==========================
 OUTRAS REGRAS
