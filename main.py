@@ -217,23 +217,15 @@ else:
     log("[boot] model loaded")
     _log_system_metrics("[boot][mem]")
 
-# Inicializa detector de objetos para recortes
+# Inicializa detector de objetos para recortes (lazy loading - não pré-carrega modelos)
 if _HAS_OBJECT_DETECTION:
     try:
         t_yolo_start = time.time()
         OBJECT_DETECTOR = ObjectDetection()
-        # Pré-aquece os modelos YOLO fazendo uma detecção dummy para forçar carregamento
-        # Isso evita demora na primeira requisição
-        try:
-            from detectors.object_detection import get_yolo_consumption_model, get_yolo_customer_data_model
-            # Força carregamento dos modelos
-            _ = get_yolo_consumption_model()
-            _ = get_yolo_customer_data_model()
-            log("[boot] modelos YOLO pré-carregados")
-        except Exception as e:
-            log(f"[boot] aviso: não foi possível pré-carregar modelos YOLO: {e}")
+        # Não pré-carrega modelos YOLO aqui para evitar demora no boot
+        # Os modelos serão carregados na primeira requisição (lazy loading)
         t_yolo_end = time.time()
-        log(f"[boot] object detector loaded em {(t_yolo_end - t_yolo_start)*1000:.1f}ms")
+        log(f"[boot] object detector inicializado em {(t_yolo_end - t_yolo_start)*1000:.1f}ms")
     except Exception as e:
         log(f"[boot] erro ao carregar object detector: {e}")
         OBJECT_DETECTOR = None
@@ -647,6 +639,9 @@ async def extract_energy(
     uf: str = Form(...),
     file: UploadFile = File(...),
 ):
+    t_request_start = time.time()
+    log(f"[req] requisição recebida: concessionaria={concessionaria}, uf={uf}")
+    
     if not _HAS_MLX_VLM:
         raise HTTPException(
             status_code=503,
@@ -669,6 +664,7 @@ async def extract_energy(
         raise HTTPException(status_code=413, detail=f"imagem acima do limite de {settings.max_image_mb}MB")
 
     t_start = time.time()
+    log(f"[timing] início processamento: {(t_start - t_request_start)*1000:.1f}ms após receber requisição")
     
     img = None
     img_temp_path = None
