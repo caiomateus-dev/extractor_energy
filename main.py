@@ -691,6 +691,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             
             output = result.stdout.strip()
             log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
+            log(f"[infer] output bruto (últimos 1000 chars): {output[-1000:]}")
             
             # Usa a mesma estratégia do código Flask: procura por JSON válido no output
             # O modelo gera JSON, então procuramos pelo JSON gerado (não o exemplo do prompt)
@@ -707,15 +708,18 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 # Remove tokens de formatação restantes
                 response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
                 
+                log(f"[infer] seção resposta após prompt (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
+                
                 # Procura por JSON válido na resposta (mesma estratégia do Flask)
-                # Procura por objeto JSON primeiro (mais comum)
-                json_match = re.search(r'\{\s*".*":\s*.*\}', response_section, re.DOTALL)
+                # Procura por objeto JSON primeiro (mais comum) - deve ter pelo menos uma chave com valor não-vazio
+                # Evita pegar o exemplo do prompt que tem valores vazios
+                json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*\}', response_section, re.DOTALL)
                 if not json_match:
                     # Tenta lista JSON
                     json_match = re.search(r'\[\s*\{.*\}\s*\]', response_section, re.DOTALL)
                 if not json_match:
-                    # Último recurso: qualquer JSON
-                    json_match = re.search(r'\{.*\}', response_section, re.DOTALL)
+                    # Último recurso: qualquer JSON (pode ser o exemplo, mas melhor que nada)
+                    json_match = re.search(r'\{\s*".*":\s*.*\}', response_section, re.DOTALL)
                 
                 if json_match:
                     filtered_output = json_match.group(0)
@@ -733,9 +737,9 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                     filtered_output = response_section
             else:
                 # Fallback: procura JSON em todo o output
-                json_match = re.search(r'\{\s*".*":\s*.*\}', output, re.DOTALL)
+                json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*\}', output, re.DOTALL)
                 if not json_match:
-                    json_match = re.search(r'\{.*\}', output, re.DOTALL)
+                    json_match = re.search(r'\{\s*".*":\s*.*\}', output, re.DOTALL)
                 
                 if json_match:
                     filtered_output = json_match.group(0)
