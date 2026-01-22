@@ -9,16 +9,23 @@ Concessionária: CEMIG
 REGRA CRÍTICA - IDENTIFIQUE O NÚMERO CORRETO:
 
 O número de instalação pode aparecer em diferentes formatos:
-- Formato simples: "3006585726", "3004848745" (8 a 12 dígitos)
-- Formato com rótulo: "UNIDADE CONSUMIDORA 3006585726" ou similar
-- Pode ter espaços ou hífens em formatos específicos válidos
+
+FORMATO 1 - Número simples (sem máscara):
+- Exemplos: "3006585726", "3004848745" (8 a 12 dígitos)
+- Aparece próximo a "Nº da Instalação"
+
+FORMATO 2 - UNIDADE CONSUMIDORA (com máscara):
+- Exemplo: "11.297.214.018-25" (com pontos e hífen)
+- Aparece próximo a "N.º DA UNIDADE CONSUMIDORA" ou "UNIDADE CONSUMIDORA"
+- PRESERVE A MÁSCARA: mantenha os pontos e o hífen exatamente como aparecem
+- Formato típico: XX.XXX.XXX.XXX-XX (números separados por pontos e hífen no final)
 
 ONDE PROCURAR (LOCALIZAÇÃO CORRETA):
 - Procure na área SUPERIOR DIREITA da fatura
 - Procure próximo a rótulos como:
   - "Nº da Instalação"
-  - "Nº DO CLIENTE" 
   - "Nº Instalação"
+  - "N.º DA UNIDADE CONSUMIDORA"
   - "UNIDADE CONSUMIDORA"
 - O número aparece na parte SUPERIOR da fatura, junto com outros dados da unidade
 
@@ -40,6 +47,7 @@ VALIDAÇÃO:
 - Se tem 4 ou mais grupos separados por espaços → provavelmente é código de barras
 - Se tem mais de 50 caracteres no total → provavelmente é código de barras
 - O número de instalação correto está sempre na parte SUPERIOR da fatura
+- Se for UNIDADE CONSUMIDORA, preserve a máscara com pontos e hífen (ex: "11.297.214.018-25")
 
 2. classificacao
 
