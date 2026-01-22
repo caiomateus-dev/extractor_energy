@@ -172,7 +172,7 @@ def _metal_memory_bytes() -> Dict[str, int]:
             try:
                 info = metal.device_info()
                 if isinstance(info, dict):
-                    for key in ["memory_size", "recommended_max_working_set_size"]:
+                    for key in ["memory_size", "recommended_max_working_set_size", "max_buffer_size"]:
                         v = info.get(key)
                         if isinstance(v, int):
                             out[key] = v
@@ -185,15 +185,18 @@ def _metal_memory_bytes() -> Dict[str, int]:
 
 def _clear_metal_cache() -> None:
     """
-    Tenta limpar memória do Metal/MLX após inferência.
-    Baseado na documentação oficial do MLX, não há uma função clear_cache(),
-    mas podemos forçar avaliação de arrays pendentes e sincronização.
-    
-    Nota: Há problemas conhecidos de vazamento de memória no MLX-VLM
-    relacionados ao KV cache não ser limpo entre gerações.
+    Limpa o cache do Metal/MLX após inferência para liberar memória GPU.
+    Usa mx.clear_cache() que é a API recomendada (mx.metal.clear_cache está deprecado).
     """
     try:
         import mlx.core as mx  # type: ignore
+        
+        # Limpa cache usando a API recomendada (não deprecada)
+        if hasattr(mx, "clear_cache"):
+            try:
+                mx.clear_cache()
+            except Exception:
+                pass
         
         # Força avaliação de arrays pendentes se o modelo estiver carregado
         # Isso ajuda a liberar memória de arrays intermediários
@@ -207,15 +210,6 @@ def _clear_metal_cache() -> None:
                     mx.eval(list(params.values()))
             except Exception:
                 pass
-        
-        # Tenta limpar cache se disponível (pode não existir em todas as versões)
-        metal = getattr(mx, "metal", None)
-        if metal is not None:
-            if hasattr(metal, "clear_cache"):
-                try:
-                    metal.clear_cache()
-                except Exception:
-                    pass
     except Exception:
         pass
 
@@ -227,6 +221,7 @@ def _log_system_metrics(tag: str) -> None:
     metal_total = metal.get("memory_size")
     metal_active = metal.get("active")
     metal_wset = metal.get("recommended_max_working_set_size")
+    metal_max_buffer = metal.get("max_buffer_size")
     metal_avail = None
     if isinstance(metal_total, int) and isinstance(metal_active, int):
         metal_avail = max(0, metal_total - metal_active)
@@ -235,6 +230,7 @@ def _log_system_metrics(tag: str) -> None:
         f"ram_total={_format_bytes(total)} ram_avail={_format_bytes(avail)} "
         f"metal_active={_format_bytes(metal_active)} metal_peak={_format_bytes(metal.get('peak'))} "
         f"metal_cache={_format_bytes(metal.get('cache'))} metal_total={_format_bytes(metal_total)} "
+        f"metal_max_buffer={_format_bytes(metal_max_buffer)} "
         f"metal_avail~={_format_bytes(metal_avail)} metal_wset={_format_bytes(metal_wset)}"
     )
 
@@ -299,24 +295,34 @@ def _read_prompt(concessionaria: str, uf: str) -> str:
 def _load_image(raw: bytes) -> Image.Image:
     """
     Carrega e processa imagem de forma eficiente em memória.
-    Redimensiona se necessário para evitar alocações excessivas.
+    Redimensiona AGressivamente se necessário para evitar alocações excessivas no Metal.
+    
+    IMPORTANTE: Imagens grandes podem causar alocações de dezenas de GB no Metal
+    durante o processamento do modelo VLM. Redimensionamos ANTES de processar.
     """
     # Carrega imagem diretamente do bytes
     bio = io.BytesIO(raw)
     try:
         img = Image.open(bio).convert("RGB")
-        # Cria uma cópia para garantir que o BytesIO possa ser fechado
+        w, h = img.size
+        pixels = w * h
+        
+        # Log do tamanho original para debug
+        if pixels > settings.max_pixels:
+            log(f"[img] imagem grande detectada: {w}x{h} ({pixels:,} pixels) - redimensionando")
+        
+        # Redimensiona ANTES de criar cópia para economizar memória
+        if pixels > settings.max_pixels:
+            scale = (settings.max_pixels / float(pixels)) ** 0.5
+            nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+            img = img.resize((nw, nh), Image.Resampling.LANCZOS)
+            log(f"[img] redimensionada para: {nw}x{nh} ({nw*nh:,} pixels)")
+        
+        # Cria cópia final (já redimensionada se necessário)
         img_copy = img.copy()
         img.close()  # Fecha a imagem original
     finally:
         bio.close()  # Fecha o BytesIO
-    
-    w, h = img_copy.size
-    if w * h > settings.max_pixels:
-        scale = (settings.max_pixels / float(w * h)) ** 0.5
-        nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
-        # Redimensiona diretamente na cópia
-        img_copy = img_copy.resize((nw, nh), Image.Resampling.LANCZOS)
     
     return img_copy
 
@@ -411,7 +417,39 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     if not (_HAS_MLX_VLM and MODEL is not None and PROCESSOR is not None and CONFIG is not None):
         raise RuntimeError("Dependência/Modelo MLX-VLM indisponível para inferência.")
 
+    # Valida tamanho da imagem antes de processar
+    w, h = img.size
+    pixels = w * h
+    if pixels > settings.max_pixels:
+        raise ValueError(
+            f"Imagem muito grande: {w}x{h} ({pixels:,} pixels). "
+            f"Máximo permitido: {settings.max_pixels:,} pixels. "
+            f"Redimensione a imagem antes de enviar."
+        )
+    
+    # Verifica memória disponível do Metal antes de processar
+    try:
+        import mlx.core as mx  # type: ignore
+        metal = getattr(mx, "metal", None)
+        if metal is not None:
+            device_info = metal.device_info()
+            if isinstance(device_info, dict):
+                max_buffer = device_info.get("max_buffer_size", 0)
+                if isinstance(max_buffer, int) and max_buffer > 0:
+                    # Estima memória necessária (conservador: ~50 bytes por pixel)
+                    estimated_memory = pixels * 50
+                    if estimated_memory > max_buffer * 0.8:  # Usa 80% do máximo como segurança
+                        raise ValueError(
+                            f"Imagem requer ~{estimated_memory / 1e9:.1f}GB, "
+                            f"mas Metal permite apenas ~{max_buffer / 1e9:.1f}GB. "
+                            f"Redimensione a imagem."
+                        )
+    except Exception:
+        pass  # Se não conseguir verificar, continua (pode funcionar)
+
     images = [img]
+    
+    log(f"[infer] processando imagem: {w}x{h} ({pixels:,} pixels)")
 
     formatted_prompt = apply_chat_template(
         PROCESSOR,
@@ -435,7 +473,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             )
             return result
         finally:
-            # Limpa cache do Metal após inferência
+            # Limpa cache do Metal após inferência (CRÍTICO para evitar acúmulo)
             _clear_metal_cache()
             # Força garbage collection
             gc.collect()
