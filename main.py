@@ -590,10 +590,11 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
 
     def _run() -> str:
         try:
-            # Usa subprocess para chamar mlx_vlm.generate como processo separado
+            # Usa subprocess para chamar mlx_vlm generate como processo separado
             # Isso permite paralelismo real - cada chamada é um processo independente
+            # Usa o comando atualizado: mlx_vlm generate (não python -m mlx_vlm.generate)
             cmd = [
-                sys.executable, "-m", "mlx_vlm.generate",
+                "mlx_vlm", "generate",
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
@@ -609,11 +610,21 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             )
             
             if result.returncode != 0:
-                error_msg = result.stderr or "Erro desconhecido no subprocesso"
-                log(f"[infer] erro no subprocesso: {error_msg}")
-                raise RuntimeError(f"Falha no processamento: {error_msg}")
+                error_msg = result.stderr or result.stdout or "Erro desconhecido no subprocesso"
+                log(f"[infer] erro no subprocesso (code {result.returncode}): {error_msg[:500]}")
+                raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
             
-            return result.stdout.strip()
+            output = result.stdout.strip()
+            # Remove mensagens de deprecação ou avisos que possam aparecer no início
+            lines = output.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if 'deprecated' in line.lower() or 'calling' in line.lower() and 'python -m' in line.lower():
+                    continue
+                if line.strip():
+                    filtered_lines.append(line)
+            
+            return '\n'.join(filtered_lines)
         finally:
             # Remove arquivo temporário
             try:
@@ -743,7 +754,10 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     result_customer = None
     result_consumption = None
     
-    try:
+    # _GATE garante que uma requisição completa suas 3 inferências antes de outra começar
+    # Isso evita intercalação de inferências entre requisições diferentes
+    # Com múltiplos workers, cada worker pode processar uma requisição por vez
+    async with _GATE:
         # Inferência 1: Imagem completa (dados gerais)
         try:
             t_infer1_start = time.time()
@@ -786,35 +800,35 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
                 result_consumption = None
         else:
             result_consumption = None
-    finally:
-        # Limpa imagens da memória
-        if img is not None:
-            img.close()
-            del img
-        if customer_crop_img is not None:
-            customer_crop_img.close()
-            del customer_crop_img
-        if consumption_crop_img is not None:
-            consumption_crop_img.close()
-            del consumption_crop_img
-        
-        # Remove arquivos temporários
-        if img_temp_path and os.path.exists(img_temp_path):
-            try:
-                os.unlink(img_temp_path)
-            except Exception:
-                pass
-        
-        # Limpa arquivos temporários do ObjectDetection
-        if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
-            try:
-                OBJECT_DETECTOR.cleanup_temp_files()
-            except Exception:
-                pass
-        
-        # Limpa cache do Metal e força garbage collection
-        _clear_metal_cache()
-        gc.collect()
+    
+    # Limpa imagens da memória (fora do _GATE para não bloquear outras requisições)
+    if img is not None:
+        img.close()
+        del img
+    if customer_crop_img is not None:
+        customer_crop_img.close()
+        del customer_crop_img
+    if consumption_crop_img is not None:
+        consumption_crop_img.close()
+        del consumption_crop_img
+    
+    # Remove arquivos temporários
+    if img_temp_path and os.path.exists(img_temp_path):
+        try:
+            os.unlink(img_temp_path)
+        except Exception:
+            pass
+    
+    # Limpa arquivos temporários do ObjectDetection
+    if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
+        try:
+            OBJECT_DETECTOR.cleanup_temp_files()
+        except Exception:
+            pass
+    
+    # Limpa cache do Metal e força garbage collection
+    _clear_metal_cache()
+    gc.collect()
 
     # Processa resultados e combina
     payload_full = {}
