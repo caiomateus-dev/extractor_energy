@@ -112,43 +112,47 @@ OUTRAS REGRAS GERAIS (CEMIG)
 DADOS DO CLIENTE E ENDEREÇO
 ==========================
 
-ATENÇÃO CRÍTICA - IGNORE O ENDEREÇO DA CEMIG:
+ATENÇÃO CRÍTICA - IDENTIFIQUE O ENDEREÇO CORRETO:
 
 Na fatura CEMIG, há DOIS endereços visíveis:
-1. Endereço da CEMIG (empresa) - geralmente aparece no topo, próximo ao logo, com texto como "CEMIG DISTRIBUIÇÃO S.A." ou "AV. BARBACENA" ou "BELO HORIZONTE" ou "SANTO AGOSTINHO"
-2. Endereço do CLIENTE - aparece logo abaixo ou ao lado do nome do cliente
+1. Endereço da CEMIG (empresa distribuidora) - aparece no topo da fatura, próximo ao logo/título, geralmente com texto como "CEMIG DISTRIBUIÇÃO S.A." ou "CNPJ" ou informações da empresa
+2. Endereço do CLIENTE - aparece na área onde está o nome do cliente
 
-VOCÊ DEVE EXTRAIR APENAS O ENDEREÇO DO CLIENTE. IGNORE COMPLETAMENTE qualquer endereço que apareça relacionado à CEMIG ou à empresa distribuidora.
+VOCÊ DEVE EXTRAIR APENAS O ENDEREÇO DO CLIENTE.
+
+COMO IDENTIFICAR O ENDEREÇO CORRETO DO CLIENTE:
+
+- O endereço do CLIENTE está SEMPRE na mesma área/seção visual onde aparece o nome do cliente
+- O endereço do CLIENTE aparece logo abaixo ou ao lado do nome do cliente, formando um bloco visual único
+- O endereço do CLIENTE geralmente vem em múltiplas linhas consecutivas abaixo do nome
+- O endereço da CEMIG aparece separado, em outra área da fatura, geralmente no topo próximo ao logo/título da empresa
+- O endereço do CLIENTE geralmente aparece junto com informações como CPF, RG, ou número de instalação do cliente
+- O endereço da CEMIG geralmente aparece junto com informações da empresa como CNPJ, inscrição estadual
+
+REGRA DE OURO: 
+Use o endereço que está visualmente agrupado com o nome do cliente. Se o endereço está na mesma área/seção onde aparece o nome "VALDELITA GOMES NEVES" (ou qualquer outro nome de cliente), esse é o endereço correto. Ignore qualquer endereço que apareça em outra área da fatura, especialmente próximo ao logo/título da CEMIG.
 
 1. nome_cliente
 
 - Geralmente aparece no topo da fatura, na área superior esquerda.
 - É o nome completo do titular da conta de energia.
-- Aparece logo acima ou ao lado do endereço do CLIENTE (não da CEMIG).
+- O endereço do CLIENTE aparece logo abaixo ou ao lado deste nome.
 
 2. Endereço completo do CLIENTE
 
-Os dados de endereço do CLIENTE geralmente aparecem logo abaixo ou ao lado do nome do cliente, na mesma área/seção onde está o nome do cliente.
-
-COMO IDENTIFICAR O ENDEREÇO CORRETO:
-- O endereço do CLIENTE está sempre na mesma área/seção onde aparece o nome do cliente
-- O endereço do CLIENTE geralmente vem em múltiplas linhas logo abaixo do nome
-- O endereço da CEMIG aparece separado, geralmente no topo próximo ao logo/título da empresa
-- Se você encontrar "BELO HORIZONTE" ou "SANTO AGOSTINHO" ou "AV. BARBACENA" - esse é o endereço da CEMIG, IGNORE
-- O endereço do CLIENTE geralmente tem o CEP do cliente e a cidade/estado do cliente (não de Belo Horizonte)
-
-CAMPOS DO ENDEREÇO DO CLIENTE:
+Os dados de endereço do CLIENTE aparecem na mesma área visual onde está o nome do cliente:
 
 - rua: Nome da rua, avenida ou logradouro do CLIENTE (NUNCA colocar numero ou complemento nesse campo)
 - numero: Número do endereço do CLIENTE
 - complemento: Complemento como apartamento, bloco, sala, caixa postal, etc. Use "" se não houver
-- bairro: Nome do bairro do CLIENTE (NÃO o bairro da CEMIG como "SANTO AGOSTINHO")
-- cidade: Nome da cidade do CLIENTE (NÃO "BELO HORIZONTE" que é da CEMIG)
+- bairro: Nome do bairro do CLIENTE
+- cidade: Nome da cidade do CLIENTE (pode ser qualquer cidade, incluindo Belo Horizonte se o cliente for de lá)
 - estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG")
 
 IMPORTANTE: 
 - Separe corretamente rua e número. O número geralmente vem após o nome da rua.
-- NUNCA use dados do endereço da CEMIG (empresa). Use apenas o endereço que aparece junto com o nome do cliente.
+- Use APENAS o endereço que está visualmente agrupado com o nome do cliente.
+- Ignore qualquer endereço que apareça em outra área da fatura, especialmente próximo ao logo/título da CEMIG.
 
 =======================
 OBRIGATORIO
