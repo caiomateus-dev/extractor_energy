@@ -693,56 +693,58 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
             log(f"[infer] output bruto (últimos 1000 chars): {output[-1000:]}")
             
-            # Usa a mesma estratégia do código Flask: procura por JSON válido no output
-            # O modelo gera JSON, então procuramos pelo JSON gerado (não o exemplo do prompt)
+            # A resposta real do modelo vem após <|im_start|>assistant
+            # Procura por esse marcador e pega tudo depois
+            assistant_marker = '<|im_start|>assistant'
+            assistant_pos = output.find(assistant_marker)
             
-            # Primeiro, encontra onde termina o prompt formatado
-            # O prompt termina com </vision_end> seguido de </im_end>
-            prompt_end_marker = '</im_end>'
-            last_prompt_end = output.rfind(prompt_end_marker)
-            
-            if last_prompt_end >= 0:
-                # Pega tudo após o fim do prompt
-                response_section = output[last_prompt_end + len(prompt_end_marker):].strip()
+            if assistant_pos >= 0:
+                # Pega tudo após o marcador assistant
+                response_section = output[assistant_pos + len(assistant_marker):].strip()
                 
                 # Remove tokens de formatação restantes
                 response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
                 
-                log(f"[infer] seção resposta após prompt (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
+                log(f"[infer] seção resposta após assistant (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
                 
                 # Procura por JSON válido na resposta (mesma estratégia do Flask)
-                # Procura por objeto JSON primeiro (mais comum) - deve ter pelo menos uma chave com valor não-vazio
-                # Evita pegar o exemplo do prompt que tem valores vazios
-                json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*\}', response_section, re.DOTALL)
-                if not json_match:
-                    # Tenta lista JSON
-                    json_match = re.search(r'\[\s*\{.*\}\s*\]', response_section, re.DOTALL)
-                if not json_match:
-                    # Último recurso: qualquer JSON (pode ser o exemplo, mas melhor que nada)
-                    json_match = re.search(r'\{\s*".*":\s*.*\}', response_section, re.DOTALL)
-                
-                if json_match:
-                    filtered_output = json_match.group(0)
-                    # Remove delimitadores de código markdown se houver
-                    filtered_output = re.sub(r'```json\s*', '', filtered_output)
-                    filtered_output = re.sub(r'\s*```', '', filtered_output)
-                    # Remove texto antes do JSON
-                    filtered_output = re.sub(r'.*?(\{|\])', r'\1', filtered_output, count=1)
-                    # Remove texto depois do JSON
-                    filtered_output = re.sub(r'(\}|\]).*', r'\1', filtered_output, count=1)
-                    # Substitui vírgula por ponto em números (formato brasileiro)
-                    filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
+                # Primeiro tenta encontrar JSON dentro de ```json ... ```
+                json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', response_section, re.DOTALL)
+                if json_block_match:
+                    filtered_output = json_block_match.group(1)
                 else:
-                    # Se não encontrou JSON, retorna a resposta limpa
-                    filtered_output = response_section
-            else:
-                # Fallback: procura JSON em todo o output
-                json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*\}', output, re.DOTALL)
-                if not json_match:
-                    json_match = re.search(r'\{\s*".*":\s*.*\}', output, re.DOTALL)
+                    # Procura por objeto JSON (deve ter pelo menos uma chave com valor não-vazio para evitar exemplo)
+                    json_match = re.search(r'\{\s*"[^"]+"\s*:\s*[^,}]+\s*.*?\}', response_section, re.DOTALL)
+                    if not json_match:
+                        # Tenta lista JSON
+                        json_match = re.search(r'\[\s*\{.*?\}\s*\]', response_section, re.DOTALL)
+                    if not json_match:
+                        # Último recurso: qualquer JSON (pode ser o exemplo, mas melhor que nada)
+                        json_match = re.search(r'\{.*?\}', response_section, re.DOTALL)
+                    
+                    if json_match:
+                        filtered_output = json_match.group(0)
+                    else:
+                        filtered_output = response_section
                 
-                if json_match:
-                    filtered_output = json_match.group(0)
+                # Remove delimitadores de código markdown se houver
+                filtered_output = re.sub(r'```json\s*', '', filtered_output)
+                filtered_output = re.sub(r'\s*```', '', filtered_output)
+                # Remove texto antes do JSON
+                filtered_output = re.sub(r'.*?(\{|\])', r'\1', filtered_output, count=1)
+                # Remove texto depois do JSON (até o próximo marcador ou fim)
+                filtered_output = re.sub(r'(\}|\])(?=.*?==========).*', r'\1', filtered_output)
+                filtered_output = re.sub(r'(\}|\]).*', r'\1', filtered_output, count=1)
+                # Substitui vírgula por ponto em números (formato brasileiro)
+                filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
+            else:
+                # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
+                # Procura todos os JSONs e pega o último (que deve ser a resposta)
+                all_json_matches = list(re.finditer(r'\{\s*".*?":\s*.*?\}', output, re.DOTALL))
+                if all_json_matches:
+                    # Pega o último JSON encontrado (deve ser a resposta do modelo)
+                    last_json_match = all_json_matches[-1]
+                    filtered_output = last_json_match.group(0)
                     # Remove delimitadores e limpa
                     filtered_output = re.sub(r'```json\s*', '', filtered_output)
                     filtered_output = re.sub(r'\s*```', '', filtered_output)
@@ -750,7 +752,12 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                     filtered_output = re.sub(r'(\}).*', r'\1', filtered_output, count=1)
                     filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
                 else:
-                    filtered_output = output
+                    # Último recurso: procura qualquer JSON
+                    json_match = re.search(r'\{.*?\}', output, re.DOTALL)
+                    if json_match:
+                        filtered_output = json_match.group(0)
+                    else:
+                        filtered_output = output
             
             log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
             return filtered_output
