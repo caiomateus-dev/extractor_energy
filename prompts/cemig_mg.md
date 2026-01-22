@@ -102,7 +102,6 @@ OUTRAS REGRAS GERAIS (CEMIG)
 
 - distribuidora: sempre "CEMIG".
 - tensao_nominal: procurar por "Tensão Nominal" ou "Tensão".
-- grupo_tarifario: procurar por "Grupo Tarifário".
-- tipo_instalacao, classificacao e grupo_tarifario normalmente aparecem próximos no mesmo bloco visual.
+- tipo_instalacao e classificacao normalmente aparecem próximos no mesmo bloco visual.
 - NÃO invente valores.  
   Se não encontrar um campo, use string vazia ("") ou null conforme o tipo.

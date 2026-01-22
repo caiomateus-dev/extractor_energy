@@ -7,7 +7,8 @@ class Settings(BaseModel):
     model_id: str = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
 
     # Valores conservadores para evitar alocações gigantes no Metal (limite de buffer).
-    max_tokens: int = 900
+    # Aumentado para garantir que o JSON completo seja gerado
+    max_tokens: int = 1500
     temperature: float = 0.0
 
     max_image_mb: int = 12

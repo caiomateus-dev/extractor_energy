@@ -457,6 +457,9 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
         prompt_text,
         num_images=len(images),
     )
+    
+    # Log do prompt formatado (primeiros 300 chars) para debug
+    log(f"[infer] prompt formatado (primeiros 300 chars): {str(formatted_prompt)[:300]}")
 
     loop = asyncio.get_running_loop()
 
@@ -467,7 +470,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 PROCESSOR,
                 formatted_prompt,
                 images,
-                verbose=False,
+                verbose=True,  # Ativado para debug - mostra progresso da geração
                 max_tokens=settings.max_tokens,
                 temperature=settings.temperature,
             )
@@ -531,7 +534,14 @@ async def extract_energy(
         raise HTTPException(status_code=400, detail=f"falha ao abrir imagem: {e}")
 
     prompt = _read_prompt(concessionaria, uf)
-    prompt = f"{prompt}\n\nContexto:\n- UF: {uf}\n- Concessionária: {concessionaria}\n"
+    # Adiciona contexto específico da requisição
+    prompt = f"""{prompt}
+
+Contexto da requisição: UF={uf}, Concessionária={concessionaria}
+
+Agora analise a imagem e retorne o JSON com os dados extraídos:"""
+    
+    log(f"[prompt] tamanho do prompt: {len(prompt)} caracteres")
 
     t0 = time.time()
 
@@ -553,9 +563,15 @@ async def extract_energy(
         _clear_metal_cache()
         gc.collect()
 
+    # Log da resposta bruta do modelo para debug
+    log(f"[infer] resposta bruta (primeiros 500 chars): {result_text[:500] if result_text else 'None'}")
+    
     try:
         payload = _extract_json(result_text)
-    except Exception:
+        log(f"[infer] JSON extraído: {json.dumps(payload, ensure_ascii=False)[:200]}")
+    except Exception as e:
+        log(f"[infer] ERRO ao extrair JSON: {e}")
+        log(f"[infer] resposta completa: {result_text}")
         payload = {}
 
     payload = _ensure_contract(payload, concessionaria_input=concessionaria)

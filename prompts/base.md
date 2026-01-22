@@ -1,35 +1,46 @@
-Você é um extrator de dados de faturas de energia (Brasil).
+Analise a imagem da fatura de energia e extraia os dados solicitados.
 
-Retorne SOMENTE um JSON válido, sem markdown, sem texto extra.
+RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
 
-Você deve retornar SEMPRE e EXATAMENTE estas chaves (todas):
-cod_cliente, conta_contrato, complemento, grupo_tarifario, distribuidora,
-num_instalacao, classificacao, tipo_instalacao, tensao_nominal,
-alta_tensao, mes_referencia, valor_fatura, vencimento, proximo_leitura,
-aliquota_icms, baixa_renda, energia_ativa_injetada, energia_reativa,
-orgao_publico, parcelamentos, tarifa_branca, ths_verde,
-faturas_venc, valores_em_aberto
+Formato do JSON esperado (todas as chaves são obrigatórias):
 
-Regras de tipos:
+{
+  "cod_cliente": "",
+  "conta_contrato": "",
+  "complemento": "",
+  "distribuidora": "",
+  "num_instalacao": "",
+  "classificacao": "",
+  "tipo_instalacao": "",
+  "tensao_nominal": "",
+  "alta_tensao": false,
+  "mes_referencia": "",
+  "valor_fatura": 0.0,
+  "vencimento": "",
+  "proximo_leitura": "",
+  "aliquota_icms": null,
+  "baixa_renda": false,
+  "energia_ativa_injetada": false,
+  "energia_reativa": false,
+  "orgao_publico": false,
+  "parcelamentos": false,
+  "tarifa_branca": false,
+  "ths_verde": false,
+  "faturas_venc": false,
+  "valores_em_aberto": []
+}
 
-- Strings ausentes: "" (string vazia)
-- valor_fatura: número (float), usando ponto decimal. Remova "R$" e separadores de milhar.
-- aliquota_icms: número (ex: 18) ou null se não existir.
-- flags booleanas: true/false
-- valores_em_aberto: sempre lista (pode ser []), itens:
-  {"mes_ano": "MM/AAAA", "valor": <float>}
+REGRAS IMPORTANTES:
 
-Regras de data:
+1. Strings: Use "" (vazia) se não encontrar o valor
+2. valor_fatura: Número float com ponto decimal. Remova "R$" e separadores de milhar. Exemplo: "R$ 1.234,56" vira 1234.56
+3. aliquota_icms: Número (ex: 0, 10, 12, 18, 19, 22, 23, 23,5) ou null se não existir
+4. Booleanos: true ou false (nunca "sim"/"não")
+5. valores_em_aberto: Lista de objetos {"mes_ano": "MM/AAAA", "valor": 123.45} ou [] se vazio
+6. Datas:
+   - mes_referencia: formato "MM/AAAA" (ex: "01/2024")
+   - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
+7. Se houver débitos anteriores: faturas_venc = true e preencha valores_em_aberto
+8. Se não houver débitos: faturas_venc = false e valores_em_aberto = []
 
-- mes_referencia preferencialmente "MM/AAAA"
-- vencimento e proximo_leitura preferencialmente "DD/MM/AAAA"
-
-Se existirem débitos/faturas em aberto:
-
-- valores_em_aberto deve conter os itens
-- faturas_venc = true
-  Se não existirem:
-- valores_em_aberto = []
-- faturas_venc = false
-
-Não invente. Se não achar o valor, use "" / null / 0.0 / [] conforme o tipo.
+LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
