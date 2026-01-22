@@ -6,12 +6,40 @@ Concessionária: CEMIG
 
 1. num_instalacao
 
-- Geralmente aparece como "Instalação", "Nº Instalação" ou "Unidade Consumidora".
-- Costuma estar na área superior direita do documento, junto aos dados da unidade.
-- É um número simples, geralmente de 8 a 12 dígitos.
-- NUNCA use o código de barras ou sequência longa que aparece no rodapé da fatura (ex: "83660000001-9 99680138006..."). 
-- O número de instalação aparece próximo a "Nº da Instalação" ou "Nº DO CLIENTE" na parte superior da fatura.
-- Se encontrar uma sequência muito longa com hífens e espaços, isso é código de barras - IGNORE e procure o número simples.
+REGRA CRÍTICA - IDENTIFIQUE O NÚMERO CORRETO:
+
+O número de instalação pode aparecer em diferentes formatos:
+- Formato simples: "3006585726", "3004848745" (8 a 12 dígitos)
+- Formato com rótulo: "UNIDADE CONSUMIDORA 3006585726" ou similar
+- Pode ter espaços ou hífens em formatos específicos válidos
+
+ONDE PROCURAR (LOCALIZAÇÃO CORRETA):
+- Procure na área SUPERIOR DIREITA da fatura
+- Procure próximo a rótulos como:
+  - "Nº da Instalação"
+  - "Nº DO CLIENTE" 
+  - "Nº Instalação"
+  - "UNIDADE CONSUMIDORA"
+- O número aparece na parte SUPERIOR da fatura, junto com outros dados da unidade
+
+ONDE NÃO PROCURAR (CÓDIGO DE BARRAS):
+- NUNCA use números que aparecem no RODAPÉ da fatura (parte inferior)
+- NUNCA use sequências muito longas com 4 ou mais grupos separados por espaços
+- NUNCA use o código de barras que aparece próximo ao código de pagamento no rodapé
+- Exemplo de código de barras (NUNCA USE): "83660000001-9 99680138006 8858770311-1 00065857260-7"
+  Este é um código de barras com múltiplos grupos longos no rodapé - IGNORE
+
+COMO IDENTIFICAR CÓDIGO DE BARRAS:
+- Código de barras geralmente tem 4 ou mais grupos de números separados por espaços
+- Código de barras aparece no RODAPÉ da fatura, próximo a "CÓDIGO DE BARRAS" ou código de pagamento
+- Código de barras é muito longo (mais de 40 caracteres no total)
+- Se você encontrar algo no rodapé com múltiplos grupos → é código de barras, IGNORE
+
+VALIDAÇÃO:
+- Se o número está no rodapé da fatura → provavelmente é código de barras, procure na parte superior
+- Se tem 4 ou mais grupos separados por espaços → provavelmente é código de barras
+- Se tem mais de 50 caracteres no total → provavelmente é código de barras
+- O número de instalação correto está sempre na parte SUPERIOR da fatura
 
 2. classificacao
 
@@ -164,9 +192,9 @@ Os dados de endereço do CLIENTE aparecem na mesma área visual onde está o nom
 - rua: Nome da rua, avenida ou logradouro do CLIENTE (NUNCA colocar numero ou complemento nesse campo). Extraia da área onde está o nome do cliente.
 - numero: Número do endereço do CLIENTE. Extraia da área onde está o nome do cliente.
 - complemento: Complemento como apartamento, bloco, sala, caixa postal (ex: "CX ****"), etc. Use "" se não houver. Extraia da área onde está o nome do cliente.
-- bairro: Nome do bairro do CLIENTE. Pode ser "AREA RURAL", "CENTRO", ou qualquer outro bairro. NUNCA use "SANTO AGOSTINHO" que é bairro da CEMIG. Extraia APENAS da área onde está o nome do cliente.
-- cidade: Nome da cidade do CLIENTE (ex: "RIBEIRÃO DAS NEVES", "BELO HORIZONTE", "CARAI", etc.). NUNCA use dados da área da CEMIG. Extraia APENAS da área onde está o nome do cliente. O nome da cidade geralmente aparece antes da sigla do estado (ex: "RIBEIRÃO DAS NEVES - MG" → cidade: "RIBEIRÃO DAS NEVES").
-- estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG"). Extraia da área onde está o nome do cliente. Geralmente aparece após o nome da cidade, separado por hífen ou vírgula (ex: "RIBEIRÃO DAS NEVES - MG" → estado: "MG"). NUNCA coloque a sigla do estado no campo cidade.
+- bairro: Nome do bairro do CLIENTE. Pode ser "AREA RURAL", "CENTRO", "SEVERINA I", ou qualquer outro bairro. NUNCA use "SANTO AGOSTINHO" que é bairro da CEMIG. Extraia APENAS da área onde está o nome do cliente. O bairro geralmente aparece em uma linha separada entre o endereço (rua/numero) e a cidade. Exemplo: "RUA DEZESSETE 251 CS" → linha seguinte → "SEVERINA I" → linha seguinte → "RIBEIRÃO DAS NEVES - MG". Nesse caso, bairro = "SEVERINA I" e cidade = "RIBEIRÃO DAS NEVES".
+- cidade: Nome da cidade do CLIENTE (ex: "RIBEIRÃO DAS NEVES", "BELO HORIZONTE", "CARAI", "UBERABA", etc.). NUNCA use dados da área da CEMIG. Extraia APENAS da área onde está o nome do cliente. O nome da cidade geralmente aparece na última linha do endereço, ANTES da sigla do estado (ex: "RIBEIRÃO DAS NEVES - MG" → cidade: "RIBEIRÃO DAS NEVES"). IMPORTANTE: cidade e bairro são DIFERENTES. Se você encontrar "RIBEIRÃO DAS NEVES" em uma linha e "SEVERINA I" em outra linha acima, então bairro = "SEVERINA I" e cidade = "RIBEIRÃO DAS NEVES".
+- estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG"). Extraia da área onde está o nome do cliente. Geralmente aparece após o nome da cidade, separado por hífen ou vírgula (ex: "RIBEIRÃO DAS NEVES - MG" → estado: "MG"). NUNCA coloque a sigla do estado no campo cidade. NUNCA coloque o nome da cidade no campo bairro.
 - cep: CEP do CLIENTE no formato "00000-000" ou "00000000". Geralmente aparece na mesma linha da cidade/estado do cliente. NUNCA use o CEP da CEMIG (ex: "30190-131"). Extraia APENAS da área onde está o nome do cliente.
 
 VALIDAÇÃO CRÍTICA:
