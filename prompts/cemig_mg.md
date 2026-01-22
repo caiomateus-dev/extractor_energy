@@ -8,6 +8,10 @@ Concessionária: CEMIG
 
 - Geralmente aparece como "Instalação", "Nº Instalação" ou "Unidade Consumidora".
 - Costuma estar na área superior direita do documento, junto aos dados da unidade.
+- É um número simples, geralmente de 8 a 12 dígitos.
+- NUNCA use o código de barras ou sequência longa que aparece no rodapé da fatura (ex: "83660000001-9 99680138006..."). 
+- O número de instalação aparece próximo a "Nº da Instalação" ou "Nº DO CLIENTE" na parte superior da fatura.
+- Se encontrar uma sequência muito longa com hífens e espaços, isso é código de barras - IGNORE e procure o número simples.
 
 2. classificacao
 
@@ -47,8 +51,11 @@ Concessionária: CEMIG
 
 8. aliquota_icms
 
-- Normalmente aparece na área de tributos/ICMS.
-- Deve ser um número válido (ex: 18, 18.5 ou 0).
+- Normalmente aparece na área de tributos/ICMS, na tabela "Itens da fatura" ou "TOTAL A PAGAR".
+- Procure por "Alíquota %" ou "Alíq. ICMS" ou similar.
+- Deve ser um número válido (ex: 18, 18.00, 18.5 ou 0).
+- Se encontrar "18.00" ou "18,00", converta para 18.0 ou 18.
+- Se não encontrar nenhum valor de alíquota ICMS, use null.
 - Se encontrar algo que não seja número, isso está errado.
 
 ==========================
@@ -77,26 +84,36 @@ tarifa_branca:
 VALORES EM ABERTO (DÉBITOS ANTERIORES)
 ==========================
 
-Se houver uma seção ou quadro com título semelhante a:
+ATENÇÃO: Débitos anteriores são faturas de MESES ANTERIORES que estão em aberto, NÃO a fatura atual.
+
+Procure por uma seção ou quadro com título semelhante a:
 
 - "REAVISO DE CONTAS VENCIDAS"  
   ou
 - "DÉBITOS ANTERIORES"
+  ou
+- "NOTIFICAÇÃO DE DÉBITO(S)"
 
-Então:
+REGRA CRÍTICA:
 
-- Para cada linha encontrada, extraia:
-  - mes_ano no formato "MM/AAAA"
-  - valor como float (sem R$, sem separador de milhar)
+- Se essa seção existir mas estiver VAZIA (sem linhas de débitos listados):
+  → valores_em_aberto = []
+  → faturas_venc = false
 
-Se NÃO houver essa seção:
+- Se essa seção existir e tiver DÉBITOS LISTADOS (com mês/ano e valor):
+  → Para cada linha de débito encontrada, extraia:
+    - mes_ano no formato "MM/AAAA" (deve ser um mês ANTERIOR ao mes_referencia atual)
+    - valor como float (sem R$, sem separador de milhar)
+  → Se houver ao menos um débito listado: faturas_venc = true
 
-- valores_em_aberto = []
-- faturas_venc = false
+- Se NÃO houver essa seção na fatura:
+  → valores_em_aberto = []
+  → faturas_venc = false
 
-Se houver ao menos um débito listado:
-
-- faturas_venc = true
+IMPORTANTE: 
+- NUNCA inclua a fatura atual (mes_referencia) em valores_em_aberto
+- Apenas débitos de meses ANTERIORES devem ser incluídos
+- Se a seção estiver vazia ou não existir, faturas_venc = false
 
 ==========================
 OUTRAS REGRAS GERAIS (CEMIG)
@@ -148,8 +165,8 @@ Os dados de endereço do CLIENTE aparecem na mesma área visual onde está o nom
 - numero: Número do endereço do CLIENTE. Extraia da área onde está o nome do cliente.
 - complemento: Complemento como apartamento, bloco, sala, caixa postal (ex: "CX ****"), etc. Use "" se não houver. Extraia da área onde está o nome do cliente.
 - bairro: Nome do bairro do CLIENTE. Pode ser "AREA RURAL", "CENTRO", ou qualquer outro bairro. NUNCA use "SANTO AGOSTINHO" que é bairro da CEMIG. Extraia APENAS da área onde está o nome do cliente.
-- cidade: Nome da cidade do CLIENTE (pode ser qualquer cidade, incluindo Belo Horizonte se o cliente realmente for de lá). NUNCA use dados da área da CEMIG. Extraia APENAS da área onde está o nome do cliente.
-- estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG"). Extraia da área onde está o nome do cliente.
+- cidade: Nome da cidade do CLIENTE (ex: "RIBEIRÃO DAS NEVES", "BELO HORIZONTE", "CARAI", etc.). NUNCA use dados da área da CEMIG. Extraia APENAS da área onde está o nome do cliente. O nome da cidade geralmente aparece antes da sigla do estado (ex: "RIBEIRÃO DAS NEVES - MG" → cidade: "RIBEIRÃO DAS NEVES").
+- estado: Sigla do estado em 2 letras MAIÚSCULAS (ex: "MG"). Extraia da área onde está o nome do cliente. Geralmente aparece após o nome da cidade, separado por hífen ou vírgula (ex: "RIBEIRÃO DAS NEVES - MG" → estado: "MG"). NUNCA coloque a sigla do estado no campo cidade.
 - cep: CEP do CLIENTE no formato "00000-000" ou "00000000". Geralmente aparece na mesma linha da cidade/estado do cliente. NUNCA use o CEP da CEMIG (ex: "30190-131"). Extraia APENAS da área onde está o nome do cliente.
 
 VALIDAÇÃO CRÍTICA:
