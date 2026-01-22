@@ -157,40 +157,8 @@ def _system_memory_total_available_bytes() -> tuple[int | None, int | None]:
 
 
 def _metal_memory_bytes() -> Dict[str, int]:
-    out: Dict[str, int] = {}
-    try:
-        import mlx.core as mx  # type: ignore
-
-        metal = getattr(mx, "metal", None)
-        if metal is None:
-            return out
-
-        for k, fn in [
-            ("active", "get_active_memory"),
-            ("peak", "get_peak_memory"),
-            ("cache", "get_cache_memory"),
-        ]:
-            if hasattr(metal, fn):
-                try:
-                    v = getattr(metal, fn)()
-                    if isinstance(v, int):
-                        out[k] = v
-                except Exception:
-                    pass
-
-        if hasattr(metal, "device_info"):
-            try:
-                info = metal.device_info()
-                if isinstance(info, dict):
-                    for key in ["memory_size", "recommended_max_working_set_size", "max_buffer_size"]:
-                        v = info.get(key)
-                        if isinstance(v, int):
-                            out[key] = v
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return out
+    """Retorna dict vazio - API mlx.metal foi removida (deprecated)"""
+    return {}
 
 
 def _clear_metal_cache() -> None:
@@ -227,21 +195,9 @@ def _clear_metal_cache() -> None:
 def _log_system_metrics(tag: str) -> None:
     rss = _process_rss_bytes()
     total, avail = _system_memory_total_available_bytes()
-    metal = _metal_memory_bytes()
-    metal_total = metal.get("memory_size")
-    metal_active = metal.get("active")
-    metal_wset = metal.get("recommended_max_working_set_size")
-    metal_max_buffer = metal.get("max_buffer_size")
-    metal_avail = None
-    if isinstance(metal_total, int) and isinstance(metal_active, int):
-        metal_avail = max(0, metal_total - metal_active)
     log(
         f"{tag} rss={_format_bytes(rss)} "
-        f"ram_total={_format_bytes(total)} ram_avail={_format_bytes(avail)} "
-        f"metal_active={_format_bytes(metal_active)} metal_peak={_format_bytes(metal.get('peak'))} "
-        f"metal_cache={_format_bytes(metal.get('cache'))} metal_total={_format_bytes(metal_total)} "
-        f"metal_max_buffer={_format_bytes(metal_max_buffer)} "
-        f"metal_avail~={_format_bytes(metal_avail)} metal_wset={_format_bytes(metal_wset)}"
+        f"ram_total={_format_bytes(total)} ram_avail={_format_bytes(avail)}"
     )
 
 
@@ -622,25 +578,8 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             f"Redimensione a imagem antes de enviar."
         )
     
-    # Verifica memória disponível do Metal antes de processar
-    try:
-        import mlx.core as mx  # type: ignore
-        metal = getattr(mx, "metal", None)
-        if metal is not None:
-            device_info = metal.device_info()
-            if isinstance(device_info, dict):
-                max_buffer = device_info.get("max_buffer_size", 0)
-                if isinstance(max_buffer, int) and max_buffer > 0:
-                    # Estima memória necessária (conservador: ~50 bytes por pixel)
-                    estimated_memory = pixels * 50
-                    if estimated_memory > max_buffer * 0.8:  # Usa 80% do máximo como segurança
-                        raise ValueError(
-                            f"Imagem requer ~{estimated_memory / 1e9:.1f}GB, "
-                            f"mas Metal permite apenas ~{max_buffer / 1e9:.1f}GB. "
-                            f"Redimensione a imagem."
-                        )
-    except Exception:
-        pass  # Se não conseguir verificar, continua (pode funcionar)
+    # Validação de tamanho já feita acima (max_pixels)
+    # Removida verificação de memória Metal (API mlx.metal deprecated)
 
     images = [img]
     
