@@ -777,7 +777,7 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     
     try:
         async with _GATE:
-            # Inferência 1: Imagem completa (dados gerais) - sequencial primeiro
+            # Inferência 1: Imagem completa (dados gerais)
             try:
                 log("[infer] iniciando inferência imagem completa")
                 result_full = await _infer_one(img, prompt_full)
@@ -787,69 +787,28 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
                 log(f"[infer] erro na inferência imagem completa: {e}")
                 result_full = None
             
-            # Inferências 2 e 3: Recortes em paralelo (após a completa)
-            if customer_crop_img is not None or consumption_crop_img is not None:
-                tasks = []
-                
-                # Inferência 2: Recorte cliente/endereço
-                if customer_crop_img is not None:
-                    async def infer_customer():
-                        try:
-                            log("[infer] iniciando inferência recorte cliente/endereço")
-                            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-                            return await _infer_one(customer_crop_img, prompt_customer)
-                        except Exception as e:
-                            log(f"[infer] erro na inferência cliente/endereço: {e}")
-                            return None
-                    
-                    tasks.append(infer_customer())
-                
-                # Inferência 3: Recorte consumo
-                if consumption_crop_img is not None:
-                    async def infer_consumption():
-                        try:
-                            log("[infer] iniciando inferência recorte consumo")
-                            prompt_consumption = _read_consumption_prompt()
-                            return await _infer_one(consumption_crop_img, prompt_consumption)
-                        except Exception as e:
-                            log(f"[infer] erro na inferência consumo: {e}")
-                            return None
-                    
-                    tasks.append(infer_consumption())
-                
-                # Executa apenas as 2 inferências dos crops em paralelo
-                if tasks:
-                    log(f"[infer] executando {len(tasks)} inferências de crops em paralelo")
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-                    
-                    # Processa resultados dos crops
-                    idx = 0
-                    
-                    # Resultado do cliente (primeira se existir)
-                    if idx < len(results) and customer_crop_img is not None:
-                        if isinstance(results[idx], Exception):
-                            log(f"[infer] exceção na inferência cliente: {results[idx]}")
-                            result_customer = None
-                        else:
-                            result_customer = results[idx]
-                        idx += 1
-                    else:
-                        result_customer = None
-                    
-                    # Resultado do consumo (segunda se existir)
-                    if idx < len(results) and consumption_crop_img is not None:
-                        if isinstance(results[idx], Exception):
-                            log(f"[infer] exceção na inferência consumo: {results[idx]}")
-                            result_consumption = None
-                        else:
-                            result_consumption = results[idx]
-                    else:
-                        result_consumption = None
-                else:
+            # Inferência 2: Recorte cliente/endereço
+            if customer_crop_img is not None:
+                try:
+                    log("[infer] iniciando inferência recorte cliente/endereço")
+                    prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+                    result_customer = await _infer_one(customer_crop_img, prompt_customer)
+                except Exception as e:
+                    log(f"[infer] erro na inferência cliente/endereço: {e}")
                     result_customer = None
-                    result_consumption = None
             else:
                 result_customer = None
+            
+            # Inferência 3: Recorte consumo
+            if consumption_crop_img is not None:
+                try:
+                    log("[infer] iniciando inferência recorte consumo")
+                    prompt_consumption = _read_consumption_prompt()
+                    result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+                except Exception as e:
+                    log(f"[infer] erro na inferência consumo: {e}")
+                    result_consumption = None
+            else:
                 result_consumption = None
     finally:
         # Limpa imagens da memória
