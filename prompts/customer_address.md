@@ -78,6 +78,7 @@ VALIDAÇÃO OBRIGATÓRIA
 ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 1. rua: DEVE começar com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA"
+   -  "RUA SEM NOME" é valido
    - Se não começar com uma dessas palavras → ERRO GRAVE
    - NÃO deve conter bairro, cidade, Quadra, Lote, número, apartamento
 

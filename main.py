@@ -565,55 +565,13 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str, uf: str
 
 
 def _read_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str:
-    """Carrega prompt específico para extração de nome do cliente e endereço"""
-    # Carrega regras específicas da concessionária se disponível
-    spec_prompt = ""
-    try:
-        mapper = _load_prompt_map()
-        prompts = mapper.get("prompts", {}) if isinstance(mapper.get("prompts", {}), dict) else {}
-        aliases = mapper.get("aliases", {}) if isinstance(mapper.get("aliases", {}), dict) else {}
-        
-        concessionaria_key = _key(concessionaria)
-        aliased = aliases.get(concessionaria_key)
-        if isinstance(aliased, str) and aliased.strip():
-            concessionaria_key = _key(aliased)
-        uf_key = _key(uf)
-        
-        spec_filename: str | None = None
-        by_uf = prompts.get(concessionaria_key)
-        if isinstance(by_uf, dict):
-            v = by_uf.get(uf_key) or by_uf.get("*")
-            if isinstance(v, str) and v.strip():
-                spec_filename = v.strip()
-        elif isinstance(by_uf, str) and by_uf.strip():
-            spec_filename = by_uf.strip()
-        
-        if spec_filename:
-            spec_path = PROMPTS_DIR / spec_filename
-            if spec_path.exists():
-                spec_content = spec_path.read_text(encoding="utf-8").strip()
-                # Extrai a seção de ENDEREÇO (pode ser "ENDEREÇO DO CLIENTE" ou "ENDEREÇO - REGRAS ESPECÍFICAS")
-                if "ENDEREÇO DO CLIENTE" in spec_content:
-                    start_idx = spec_content.find("ENDEREÇO DO CLIENTE")
-                    end_idx = spec_content.find("==========================", start_idx + 1)
-                    if end_idx == -1:
-                        end_idx = len(spec_content)
-                    spec_prompt = spec_content[start_idx:end_idx].strip()
-                elif "ENDEREÇO - REGRAS ESPECÍFICAS" in spec_content:
-                    # Para Equatoriais e outras que usam formato diferente
-                    start_idx = spec_content.find("ENDEREÇO - REGRAS ESPECÍFICAS")
-                    end_idx = spec_content.find("==========================", start_idx + 1)
-                    if end_idx == -1:
-                        end_idx = len(spec_content)
-                    spec_prompt = spec_content[start_idx:end_idx].strip()
-    except Exception:
-        pass
-    
+    """Carrega prompt para extração de endereço do cliente"""
+    # Retorna APENAS o prompt base de customer_address.md
+    # NÃO mescla com prompts específicos da concessionária
     base_path = PROMPTS_DIR / "customer_address.md"
     if not base_path.exists():
         raise RuntimeError(f"Arquivo {base_path.as_posix()} não encontrado.")
     
-    # Retorna apenas o prompt base, sem mesclar com regras específicas
     return base_path.read_text(encoding="utf-8").strip()
 
 

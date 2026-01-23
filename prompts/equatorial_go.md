@@ -183,33 +183,6 @@ consumo_lista: Procure na seção de histórico de consumo (geralmente não apar
 - consumo: número inteiro em kWh
 
 ==========================
-ENDEREÇO - REGRAS ESPECÍFICAS EQUATORIAL
-==========================
-
-⚠️⚠️⚠️ ATENÇÃO: Esta seção é usada APENAS para extração de endereço via crop separado ⚠️⚠️⚠️
-
-REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL - SIGA EXATAMENTE:
-
-EXEMPLO DE ENDEREÇO EQUATORIAL: "RUA 01, Q. 11, L. 22, S/N VILA SAO JOSE CEP: 75402700 INHUMAS GO"
-
-EXTRAÇÃO OBRIGATÓRIA (SIGA EXATAMENTE):
-- rua: "RUA 01" (o número "01" após "RUA" faz parte do nome da rua. NÃO é o número do endereço. NUNCA extraia esse número como campo `numero`. Se aparecer "RUA 01", o campo `rua` deve ser "RUA 01" completo)
-- numero: "S/N" (SEMPRE que aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero`. NUNCA coloque em `complemento`. Se aparecer "S/N" no endereço, o campo `numero` DEVE ser "S/N")
-- complemento: "Q. 11, L. 22" (Quadra e Lote são complementos. Se aparecer "Q. 11, L. 22, S/N", extraia apenas "Q. 11, L. 22" sem o S/N. O S/N vai para o campo `numero`)
-- bairro: "VILA SAO JOSE" (nome completo incluindo prefixo "VILA". Se aparecer "VILA SAO JOSE", extraia completo)
-- cep: "75402700" (extraia APENAS os números após "CEP:" na linha do endereço. Se aparecer "CEP: 75402700", extraia "75402700". NÃO use CEPs de outras partes da fatura como "54.000-000")
-- cidade: "INHUMAS" (nome da cidade que aparece ANTES da sigla do estado na linha do endereço. Se aparecer "INHUMAS GO", a cidade é "INHUMAS". NÃO use "GOIÂNIA" ou outras cidades de outras partes da fatura)
-- estado: "GO" (sigla de 2 letras após o nome da cidade na linha do endereço)
-
-REGRAS ABSOLUTAS (SIGA EXATAMENTE):
-1. Se aparecer "RUA XX" ou "AVENIDA XX" (onde XX é um número), o número XX faz parte do nome da rua. NÃO extraia esse número como campo `numero`. O campo `rua` deve conter "RUA XX" completo.
-2. Se aparecer "S/N" ou "Sem Número" no endereço, SEMPRE coloque "S/N" no campo `numero` (NUNCA em `complemento`). Se aparecer "S/N", o campo `numero` DEVE ser "S/N".
-3. Complemento: Use para Quadra (Q.), Lote (L.), Bloco, Apto, etc. Se aparecer "Q. 11, L. 22, S/N", extraia apenas "Q. 11, L. 22" no campo `complemento` (sem o S/N). O S/N vai para `numero`.
-4. CEP: Procure por "CEP:" seguido de números na linha do endereço. Extraia apenas os números (sem formatação). Se aparecer "CEP: 75402700", extraia "75402700". NÃO use valores de outras partes da fatura.
-5. Cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. Se aparecer "INHUMAS GO", a cidade é "INHUMAS". NÃO confunda com outras cidades que possam aparecer em outras partes da fatura.
-6. Extraia APENAS os dados que aparecem na linha do endereço do cliente. NÃO use valores de outras seções da fatura (como cidade da distribuidora, CEPs de outras partes, etc.).
-
-==========================
 OBRIGATORIO
 ==========================
 
