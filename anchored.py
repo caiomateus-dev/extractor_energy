@@ -185,16 +185,29 @@ async def extract_fields_via_anchors(
         log_main("[ocr_anchors] OCR não disponível, pulando detecção de âncoras")
         return results
     
+    ocr_results = []
+    ocr_time_ms = 0.0
     try:
         ocr_results = ocr_detector.detect_text_boxes(img)
         t_ocr_end = time.time()
-        log_main(f"[ocr_anchors] OCR concluído: {len(ocr_results)} textos encontrados em {(t_ocr_end - t_ocr_start)*1000:.1f}ms")
+        ocr_time_ms = (t_ocr_end - t_ocr_start) * 1000
+        log_main(f"[ocr_anchors] OCR concluído: {len(ocr_results)} textos encontrados em {ocr_time_ms:.1f}ms")
+        
+        # Log first few texts for debugging
+        if ocr_results:
+            sample_texts = [r['text'][:50] for r in ocr_results[:5]]
+            log_main(f"[ocr_anchors] Exemplos de textos encontrados: {sample_texts}")
     except Exception as e:
         log_main(f"[ocr_anchors] Erro ao executar OCR: {e}")
         return results
     
     if not ocr_results:
         log_main("[ocr_anchors] AVISO: Nenhum texto detectado pelo OCR")
+        return results
+    
+    # Skip OCR anchor detection if it took too long (>10s) - not worth it
+    if ocr_time_ms > 10000:
+        log_main(f"[ocr_anchors] OCR muito lento ({ocr_time_ms:.1f}ms), pulando detecção de âncoras")
         return results
     
     # Step 2: Find anchors for each field
@@ -357,22 +370,26 @@ async def extract_energy(
         'num_instalacao',
     ]
     
-    # Step 1: Extract fields via OCR anchors (DESABILITADO - muito lento)
-    # Pula direto para tiling que funciona melhor
+    # Step 1: Extract fields via OCR anchors (pode ser lento)
     t_anchors_start = time.time()
     anchor_results = await extract_fields_via_anchors(img, anchor_fields)
     t_anchors_end = time.time()
-    log_main(f"[ocr_anchors] extração via âncoras: {(t_anchors_end - t_anchors_start)*1000:.1f}ms")
+    anchor_time_ms = (t_anchors_end - t_anchors_start) * 1000
+    log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
     payload.update(anchor_results)
     
-    # Step 2: Fallback for missing fields via tiling
+    # Step 2: Fallback for missing fields via tiling (limitado se OCR foi ineficiente)
     missing_fields = [f for f in anchor_fields if not payload.get(f)]
     if missing_fields:
-        t_tiling_start = time.time()
-        tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
-        t_tiling_end = time.time()
-        log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
-        payload.update(tiling_results)
+        # Se OCR demorou muito e não encontrou nada, pula tiling também
+        if anchor_time_ms > 5000 and not anchor_results:
+            log_main(f"[ocr_anchors] OCR ineficiente ({anchor_time_ms:.1f}ms sem resultados), pulando tiling")
+        else:
+            t_tiling_start = time.time()
+            tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
+            t_tiling_end = time.time()
+            log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
+            payload.update(tiling_results)
     
     # Step 3: Use YOLO for customer address and consumption (keep existing logic)
     customer_crop_img = None
