@@ -1016,6 +1016,15 @@ async def extract_energy(
     # Inferência 2: Recorte consumo (SEGUNDO)
     if consumption_crop_img is not None:
         try:
+            # Salva imagem do crop para debug
+            crop_debug_path = "/tmp/consumption_crop_debug.jpg"
+            try:
+                consumption_crop_img.save(crop_debug_path, "JPEG", quality=95)
+                log(f"[consumo] crop salvo para debug: {crop_debug_path}")
+                log(f"[consumo] dimensões do crop: {consumption_crop_img.size[0]}x{consumption_crop_img.size[1]} pixels")
+            except Exception as e:
+                log(f"[consumo] erro ao salvar crop: {e}")
+            
             t_infer2_start = time.time()
             log("[infer] iniciando inferência recorte consumo")
             prompt_consumption = _read_consumption_prompt()
