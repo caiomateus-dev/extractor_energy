@@ -320,8 +320,9 @@ def _load_image(raw: bytes) -> Image.Image:
     return img_copy
 
 
-def _extract_json(text: str) -> Dict[str, Any]:
-    """Extrai JSON do texto, removendo mensagens de deprecação e outros textos extras"""
+def _extract_json(text: str) -> Dict[str, Any] | list:
+    """Extrai JSON do texto, removendo mensagens de deprecação e outros textos extras.
+    Retorna dict ou list dependendo do formato do JSON encontrado."""
     text = text.strip()
     
     # Remove linhas com mensagens de deprecação ou avisos
@@ -343,10 +344,25 @@ def _extract_json(text: str) -> Dict[str, Any]:
     text = '\n'.join(filtered_lines).strip()
     
     # Tenta encontrar JSON válido
-    # Primeiro tenta objeto JSON completo
+    # Primeiro tenta array JSON completo (formato esperado para consumo)
+    if text.startswith("[") and text.endswith("]"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    
+    # Tenta objeto JSON completo
     if text.startswith("{") and text.endswith("}"):
         try:
             return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    
+    # Procura por array JSON no texto (prioridade para arrays)
+    m = re.search(r'\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
         except json.JSONDecodeError:
             pass
     
@@ -358,7 +374,19 @@ def _extract_json(text: str) -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
     
-    # Procura por qualquer JSON válido (mais permissivo)
+    # Procura por qualquer JSON válido (mais permissivo) - array primeiro
+    m = re.search(r'\[.*\]', text, re.DOTALL)
+    if m:
+        json_str = m.group(0)
+        # Tenta limpar vírgulas finais e outros problemas comuns
+        json_str = re.sub(r',\s*]', ']', json_str)
+        json_str = re.sub(r',\s*}', '}', json_str)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+    
+    # Procura por objeto JSON (fallback)
     m = re.search(r'\{.*\}', text, re.DOTALL)
     if m:
         json_str = m.group(0)
@@ -998,6 +1026,8 @@ async def extract_energy(
             # Extrai JSON imediatamente
             if result_consumption:
                 try:
+                    # Log do resultado bruto do modelo (primeiros 500 chars para não poluir)
+                    log(f"[consumo] resultado bruto do modelo (primeiros 500 chars): {result_consumption[:500] if len(result_consumption) > 500 else result_consumption}")
                     extracted = _extract_json(result_consumption)
                     log(f"[consumo] resultado extraído (tipo: {type(extracted).__name__}): {extracted}")
                     
