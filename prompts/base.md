@@ -54,11 +54,15 @@ REGRAS IMPORTANTES:
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
 9. nome_cliente: Nome completo do cliente conforme aparece na fatura. O nome do cliente é APENAS a primeira linha da seção de identificação do cliente.
-   REGRAS CRÍTICAS:
-   - O nome do cliente PARA imediatamente quando encontrar qualquer informação de endereço (cidade, estado, CEP, bairro, rua, número)
-   - Se a primeira linha contém nome seguido de cidade/estado/CEP separados por espaço, vírgula ou hífen, extraia SOMENTE o nome (tudo antes da primeira informação geográfica)
-   - NÃO inclua nomes de cidades, estados, CEPs ou qualquer informação geográfica no campo nome_cliente
-   - O campo nome_cliente contém EXCLUSIVAMENTE o nome da pessoa física ou razão social da empresa
-   - Identifique onde termina o nome e começa o endereço: geralmente há uma separação visual ou textual (vírgula, hífen, quebra de linha, ou mudança de contexto)
+   REGRAS CRÍTICAS PARA EXTRAÇÃO:
+   - O nome do cliente é SEMPRE a primeira informação textual na seção de identificação do cliente
+   - Se a primeira linha contém múltiplas palavras separadas por espaços, vírgulas ou hífens, analise cuidadosamente:
+     * O nome do cliente geralmente é curto (1 a 4 palavras): nome próprio, sobrenome, ou razão social simples
+     * Se aparecer uma palavra que parece ser nome de cidade (palavras comuns de cidades brasileiras), essa palavra e tudo depois dela NÃO faz parte do nome
+     * Se aparecer sigla de estado (2 letras maiúsculas como MG, SP, RJ, RS, etc.), essa sigla e tudo antes dela que seja nome de cidade NÃO faz parte do nome
+     * Se aparecer CEP (formato numérico com ou sem hífen), tudo a partir do CEP NÃO faz parte do nome
+     * Se aparecer hífen seguido de sigla de estado, tudo a partir do hífen NÃO faz parte do nome
+   - PROCESSAMENTO: Identifique onde termina o nome pessoal/empresarial e começa a informação geográfica (cidade/estado/CEP). Extraia SOMENTE a parte do nome, parando antes da primeira informação geográfica identificada.
+   - O campo nome_cliente contém EXCLUSIVAMENTE o nome da pessoa física ou razão social da empresa, SEM qualquer informação geográfica
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
