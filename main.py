@@ -768,7 +768,8 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             output = result.stdout.strip()
             
             def _find_balanced_json(text: str, start_char: str = '{') -> str | None:
-                """Encontra JSON completo com chaves/colchetes balanceados"""
+                """Encontra JSON completo com chaves/colchetes balanceados.
+                Se o JSON estiver incompleto (cortado), tenta fechar corretamente."""
                 if start_char == '{':
                     end_char = '}'
                     open_char, close_char = '{', '}'
@@ -783,6 +784,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 depth = 0
                 in_string = False
                 escape_next = False
+                last_valid_pos = start_pos
                 
                 for i in range(start_pos, len(text)):
                     char = text[i]
@@ -808,18 +810,46 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                         depth -= 1
                         if depth == 0:
                             return text[start_pos:i+1]
+                        elif depth > 0:
+                            last_valid_pos = i
+                
+                # Se chegou ao fim e ainda tem chaves abertas, tenta fechar
+                if depth > 0:
+                    # Tenta encontrar o último objeto/array válido antes do corte
+                    # Procura pelo último } ou ] que fecha algo
+                    potential_json = text[start_pos:last_valid_pos+1]
+                    # Tenta adicionar as chaves fechadoras necessárias
+                    potential_json += close_char * depth
+                    try:
+                        # Valida se é JSON válido
+                        json.loads(potential_json)
+                        return potential_json
+                    except json.JSONDecodeError:
+                        # Se não funcionar, retorna o que tem até o último válido
+                        return text[start_pos:last_valid_pos+1] if last_valid_pos > start_pos else None
                 
                 return None
+            
+            # Remove mensagens de deprecação primeiro
+            lines = output.split('\n')
+            filtered_lines = []
+            for line in lines:
+                line_lower = line.lower().strip()
+                # Pula linhas de deprecação
+                if any(x in line_lower for x in ['deprecated', 'calling', 'python -m']):
+                    continue
+                filtered_lines.append(line)
+            output_cleaned = '\n'.join(filtered_lines).strip()
             
             # A resposta real do modelo vem após <|im_start|>assistant
             # Procura por esse marcador e pega tudo depois
             assistant_marker = '<|im_start|>assistant'
-            assistant_pos = output.find(assistant_marker)
-            filtered_output = output  # Inicialização padrão
+            assistant_pos = output_cleaned.find(assistant_marker)
+            filtered_output = output_cleaned  # Inicialização padrão
             
             if assistant_pos >= 0:
                 # Pega tudo após o marcador assistant
-                response_section = output[assistant_pos + len(assistant_marker):].strip()
+                response_section = output_cleaned[assistant_pos + len(assistant_marker):].strip()
                 
                 # Remove tokens de formatação restantes
                 response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
@@ -890,18 +920,12 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 # Substitui vírgula por ponto em números (formato brasileiro)
                 filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
             else:
-                # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
-                # Remove mensagens de deprecação primeiro
-                cleaned_output = output
-                lines = cleaned_output.split('\n')
-                filtered_lines = []
-                for line in lines:
-                    line_lower = line.lower().strip()
-                    # Pula linhas de deprecação
-                    if any(x in line_lower for x in ['deprecated', 'calling', 'python -m']):
-                        continue
-                    filtered_lines.append(line)
-                cleaned_output = '\n'.join(filtered_lines).strip()
+                # Fallback: procura pelo JSON válido no output_cleaned
+                # Remove markdown primeiro
+                cleaned_output = output_cleaned
+                cleaned_output = re.sub(r'```json\s*\n?', '', cleaned_output, flags=re.IGNORECASE | re.MULTILINE)
+                cleaned_output = re.sub(r'\n?\s*```\s*$', '', cleaned_output, flags=re.MULTILINE | re.IGNORECASE)
+                cleaned_output = cleaned_output.strip()
                 
                 # Encontra todas as posições de '{' e tenta extrair JSON completo de cada uma
                 json_candidates = []
@@ -921,11 +945,24 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                     pos += 1
                 
                 if json_candidates:
-                    # Pega o JSON MAIOR (deve ser a resposta completa do modelo)
-                    # Ordena por tamanho e pega o maior
-                    json_candidates.sort(key=lambda x: x[2], reverse=True)
-                    _, filtered_output, _ = json_candidates[0]
-                    # Remove delimitadores markdown se houver
+                    # Para consumo, pega o primeiro JSON válido que tem consumo_lista
+                    # Não pega o maior, pois pode estar cortado ou ter múltiplas respostas
+                    for pos, json_str, size in json_candidates:
+                        try:
+                            parsed = json.loads(json_str)
+                            # Se for consumo, verifica se tem consumo_lista válida
+                            if isinstance(parsed, dict) and 'consumo_lista' in parsed:
+                                consumo_lista = parsed.get('consumo_lista', [])
+                                if isinstance(consumo_lista, list) and len(consumo_lista) <= 13:
+                                    filtered_output = json_str
+                                    break
+                        except json.JSONDecodeError:
+                            continue
+                    else:
+                        # Se não encontrou um JSON válido com consumo_lista, pega o primeiro válido
+                        _, filtered_output, _ = json_candidates[0]
+                    
+                    # Remove delimitadores markdown se houver (já removido, mas garante)
                     filtered_output = re.sub(r'^```json\s*', '', filtered_output, flags=re.MULTILINE)
                     filtered_output = re.sub(r'\s*```$', '', filtered_output, flags=re.MULTILINE)
                     filtered_output = filtered_output.strip()
@@ -1132,8 +1169,17 @@ async def extract_energy(
                         log(f"[consumo] AVISO: payload_consumption não tem consumo_lista. Keys: {list(payload_consumption.keys()) if isinstance(payload_consumption, dict) else 'N/A'}")
                         payload_consumption = {'consumo_lista': []}
                     else:
-                        consumo_count = len(payload_consumption['consumo_lista']) if isinstance(payload_consumption.get('consumo_lista'), list) else 0
-                        log(f"[consumo] consumo_lista extraída com sucesso: {consumo_count} itens")
+                        consumo_lista = payload_consumption['consumo_lista']
+                        if isinstance(consumo_lista, list):
+                            # Limita a 13 itens (conforme prompt)
+                            if len(consumo_lista) > 13:
+                                log(f"[consumo] AVISO: consumo_lista tem {len(consumo_lista)} itens, limitando a 13")
+                                payload_consumption['consumo_lista'] = consumo_lista[:13]
+                            consumo_count = len(payload_consumption['consumo_lista'])
+                            log(f"[consumo] consumo_lista extraída com sucesso: {consumo_count} itens")
+                        else:
+                            log(f"[consumo] AVISO: consumo_lista não é uma lista: {type(consumo_lista)}")
+                            payload_consumption = {'consumo_lista': []}
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
                     import traceback

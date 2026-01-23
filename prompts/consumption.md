@@ -19,8 +19,10 @@ REGRAS CRÍTICAS:
 - consumo_lista: Lista de objetos com histórico de consumo mensal na ORDEM EXATA que aparece na tabela
 - CRÍTICO: A tabela mostra MÚLTIPLOS meses. Extraia TODOS eles, não apenas 1!
 - CRÍTICO: Se a tabela tem 12 meses, retorne 12 objetos. Se tem 6 meses, retorne 6 objetos. Se tem 13 meses, retorne 13 objetos.
-- CRÍTICO: MÁXIMO de 13 itens na lista. Se houver mais de 13 meses na tabela, extraia apenas os 13 mais recentes
-- CRÍTICO: NÃO retorne apenas {"mes_ano": "...", "consumo": 123}. SEMPRE retorne {"consumo_lista": [...]} com TODOS os meses!
+- CRÍTICO ABSOLUTO: MÁXIMO de 13 itens na lista. NUNCA retorne mais de 13 itens!
+- CRÍTICO ABSOLUTO: Se houver mais de 13 meses na tabela, extraia APENAS os 13 mais recentes e PARE. NÃO continue gerando mais itens!
+- CRÍTICO ABSOLUTO: Se você gerar mais de 13 itens, sua resposta está ERRADA. PARE no 13º item!
+- CRÍTICO: NÃO retorne apenas {"mes_ano": "...", "consumo": 123}. SEMPRE retorne {"consumo_lista": [...]} com TODOS os meses (até 13)!
 - mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
 - consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
 
@@ -36,12 +38,16 @@ Converta para o formato numérico "MM/AAAA":
 IMPORTANTE:
 - A imagem mostra uma TABELA COMPLETA com histórico de consumo. Olhe TODA a tabela, não apenas a primeira linha!
 - Extraia TODOS os meses que aparecem na tabela de consumo (até 13 itens)
+- CRÍTICO: Se a tabela tem mais de 13 meses, extraia APENAS os 13 mais recentes e PARE imediatamente!
+- CRÍTICO: NÃO gere mais de 13 itens. Se você gerar 14, 15, 20 ou mais itens, sua resposta está COMPLETAMENTE ERRADA!
 - Extraia os meses EXATAMENTE como aparecem na tabela, na ordem que aparecem
 - NÃO invente meses sequenciais (01, 02, 03...). Use os meses reais da tabela
-- NÃO extraia apenas 1 mês - extraia TODA a tabela de histórico de consumo
+- NÃO extraia apenas 1 mês - extraia TODA a tabela de histórico de consumo (até 13 itens)
 - Mantenha a ordem da tabela (geralmente do mais recente para o mais antigo)
 - Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
 - Cada entrada deve ter o mês/ano EXATO da tabela e o consumo correspondente em kWh (número inteiro)
+
+LIMITE ABSOLUTO: 13 ITENS. NÃO MAIS QUE ISSO. PARE NO 13º ITEM!
 
 EXEMPLO: Se a tabela mostra:
 09/2024: 74 kWh
