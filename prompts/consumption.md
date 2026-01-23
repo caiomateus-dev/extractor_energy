@@ -1,8 +1,10 @@
 Analise esta imagem que contém APENAS dados de consumo médio de uma fatura de energia.
 
-RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
+A imagem mostra uma TABELA COMPLETA com histórico de consumo mensal. A tabela tem MÚLTIPLAS LINHAS, cada uma representando um mês diferente.
 
-CRÍTICO: A imagem contém uma TABELA COMPLETA com múltiplos meses de histórico de consumo. Você DEVE extrair TODOS os meses que aparecem na tabela, não apenas 1 mês!
+CRÍTICO: Você DEVE extrair TODAS as linhas da tabela, não apenas a primeira linha!
+
+RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
 
 Formato do JSON esperado:
 {

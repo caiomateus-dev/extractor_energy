@@ -1037,14 +1037,14 @@ async def extract_energy(
             log(f"[timing] inferência consumo: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
             
             # Log completo da saída BRUTA do modelo ANTES de qualquer processamento
+            # Loga EXATAMENTE como vem do modelo, sem formatação
             if result_consumption:
                 log(f"[consumo] ========== SAÍDA BRUTA DO MODELO (ANTES DO _extract_json) ==========")
                 log(f"[consumo] TIPO: {type(result_consumption)}")
                 log(f"[consumo] TAMANHO: {len(result_consumption)} caracteres")
-                log(f"[consumo] CONTEÚDO COMPLETO:")
-                # Log linha por linha para não perder nada
-                for i, line in enumerate(result_consumption.split('\n'), 1):
-                    log(f"[consumo] LINHA {i}: {repr(line)}")
+                log(f"[consumo] CONTEÚDO BRUTO (EXATAMENTE COMO VEM DO MODELO):")
+                # Loga o texto bruto diretamente, sem formatação
+                log(result_consumption)
                 log(f"[consumo] ========== FIM SAÍDA BRUTA ==========")
             
             # Extrai JSON imediatamente
