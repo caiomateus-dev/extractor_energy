@@ -13,28 +13,87 @@ Formato do JSON esperado:
   "cep": ""
 }
 
-REGRAS GERAIS:
-- rua: Nome completo da rua/avenida SEM complementos. Se aparecer "RUA" ou "AVENIDA" seguido de números e depois vírgula com complementos (Quadra, Lote, etc.), extraia APENAS o nome da rua com o número após "RUA"/"AVENIDA". O número após "RUA"/"AVENIDA" faz parte do nome da rua, não é o número do endereço. NÃO inclua Quadra, Lote ou outros complementos no campo rua.
-- numero: Número do endereço. Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo numero (NUNCA em complemento). Se houver um número explícito de endereço, extraia-o.
-- complemento: Complemento do endereço (Quadra (Q.), Lote (L.), apto, bloco, etc.) ou "" se não houver. 
-  - Se aparecer "Q. 11, L. 22", extraia "Q. 11, L. 22" completo (incluindo "Q." e "L.")
-  - Se aparecer apenas "Q. 11", extraia "Q. 11" completo
-  - Se aparecer apenas "L. 22", extraia "L. 22" completo
-  - Se aparecer "S/N" junto com complemento (ex: "Q. 11, L. 22, S/N"), extraia apenas o complemento sem o S/N: "Q. 11, L. 22"
-  - CRÍTICO: NÃO extraia apenas números soltos como "22" ou "11". O complemento DEVE incluir a identificação completa (Q., L., Apto., Bloco, etc.)
-  - Se não houver complemento visível na imagem, use "" (string vazia)
-- bairro: Nome COMPLETO do bairro incluindo prefixos como "JARDIM", "VILA", "CONJUNTO", "PARQUE", "SETOR", "RESIDENCIAL", etc.
-  - CRÍTICO: SEMPRE extraia o nome completo do bairro como aparece na fatura, incluindo TODOS os prefixos
-  - Se aparecer "JARDIM PRIMAVERA" → use "JARDIM PRIMAVERA" (NUNCA apenas "PRIMAVERA")
-  - Se aparecer "VILA NOVA" → use "VILA NOVA" (NUNCA apenas "NOVA")
-  - Se aparecer "CONJUNTO HABITACIONAL X" → use "CONJUNTO HABITACIONAL X" completo
-  - Se aparecer "PARQUE DAS FLORES" → use "PARQUE DAS FLORES" (NUNCA apenas "FLORES")
-  - Se aparecer "SETOR COMERCIAL" → use "SETOR COMERCIAL" completo
-  - Se aparecer "RESIDENCIAL ABC" → use "RESIDENCIAL ABC" completo
-  - ATENÇÃO: Leia TUDO que aparece antes do nome do bairro. Se houver "JARDIM", "VILA", "CONJUNTO", etc., inclua no campo bairro
-- cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. NÃO use cidade de outras partes da fatura (como cidade da distribuidora ou cidade de outras seções). Extraia APENAS a cidade que aparece na linha do endereço do cliente.
-- estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP", "GO") que aparece após o nome da cidade na linha do endereço. CRÍTICO: Extraia APENAS o estado que aparece na linha do endereço do cliente. NÃO use estado de outras partes da fatura.
-- cep: CEP do endereço. Procure por "CEP:" seguido de números na linha do endereço. Extraia TODOS os números após "CEP:" (o CEP tem 8 dígitos). NÃO use CEPs de outras partes da fatura. Se aparecer "CEP: 75402700", extraia "75402700" (8 dígitos completos). Se aparecer "CEP: 65.000-000" ou similar, extraia apenas os números: "65000000".
+==========================
+EXTRAÇÃO PASSO A PASSO
+==========================
+
+SIGA ESTA ORDEM EXATA para extrair os campos do endereço:
+
+1. rua: Primeira parte do endereço até a primeira vírgula (ou até encontrar "Q.", "L.", "S/N", etc.)
+   - Se aparecer "RUA SEM NOME" → extraia "RUA SEM NOME" completo
+   - Se aparecer "RUA 01" → extraia "RUA 01" completo (o número faz parte do nome)
+   - Se aparecer "AVENIDA X" → extraia "AVENIDA X" completo
+   - CRÍTICO: Pare na primeira vírgula. Tudo antes da primeira vírgula é a rua.
+   - NÃO inclua Quadra (Q.), Lote (L.), número (S/N), apartamento, etc. no campo rua
+
+2. numero: Número do endereço ou "S/N"
+   - Se aparecer "S/N" ou "Sem Número" → use "S/N"
+   - Se aparecer um número explícito de endereço (ex: "123", "505") → extraia esse número
+   - CRÍTICO: "S/N" SEMPRE vai no campo numero, NUNCA em complemento
+
+3. complemento: Tudo que vem após a rua e antes do bairro (Quadra, Lote, Apartamento, etc.)
+   - Se aparecer "Q. 4, L. 11, APART-106, RESIDENCIAL OURENSE" → extraia TUDO: "Q. 4, L. 11, APART-106, RESIDENCIAL OURENSE"
+   - Se aparecer "Q. 11, L. 22" → extraia "Q. 11, L. 22" completo
+   - CRÍTICO: Inclua TODOS os elementos do complemento (Q., L., APART., RESIDENCIAL, etc.)
+   - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento (ele vai em numero)
+   - Se não houver complemento, use "" (string vazia)
+
+4. bairro: Nome completo do bairro incluindo prefixos
+   - Se aparecer "PARQUE NAPOLIS A" → extraia "PARQUE NAPOLIS A" completo (incluindo o "A")
+   - Se aparecer "JARDIM PRIMAVERA" → extraia "JARDIM PRIMAVERA" completo
+   - Se aparecer "VILA NOVA" → extraia "VILA NOVA" completo
+   - CRÍTICO: Extraia EXATAMENTE como aparece na fatura, incluindo letras, números e prefixos
+
+5. cidade: Nome da cidade que aparece ANTES da sigla do estado
+   - Extraia APENAS da linha do endereço do cliente
+   - NÃO use cidade da distribuidora ou outras seções
+
+6. estado: Sigla de 2 letras após a cidade
+   - Formato: "GO", "MG", "SP", etc.
+   - Extraia APENAS da linha do endereço do cliente
+
+7. cep: Números após "CEP:" na linha do endereço
+   - Extraia apenas os 8 dígitos (sem formatação)
+   - Se aparecer "CEP: 72885173" → extraia "72885173"
+   - NÃO use CEPs de outras partes da fatura
+
+==========================
+EXEMPLO PRÁTICO
+==========================
+
+Se o endereço for: "RUA SEM NOME, Q. 4, L. 11, S/N, APART-106, RESIDENCIAL OURENSE PARQUE NAPOLIS A CEP: 72885173 CIDADE OCIDENTAL GO"
+
+EXTRAÇÃO CORRETA:
+- rua: "RUA SEM NOME"
+- numero: "S/N"
+- complemento: "Q. 4, L. 11, APART-106, RESIDENCIAL OURENSE"
+- bairro: "PARQUE NAPOLIS A"
+- cidade: "CIDADE OCIDENTAL"
+- estado: "GO"
+- cep: "72885173"
+
+==========================
+VALIDAÇÃO OBRIGATÓRIA
+==========================
+
+ANTES DE RETORNAR O JSON, VERIFIQUE:
+
+1. rua: Deve conter apenas o nome da rua/avenida (até a primeira vírgula)
+   - NÃO deve conter Quadra, Lote, número, apartamento, bairro
+   - Se aparecer "RUA SEM NOME" → rua = "RUA SEM NOME" (NÃO "PARQUE NAPOLES")
+
+2. numero: Deve ser "S/N" ou um número de endereço
+   - "S/N" NUNCA vai em complemento
+
+3. complemento: Deve conter TODOS os elementos após a rua e antes do bairro
+   - Inclua Q., L., APART., RESIDENCIAL, etc. se aparecerem
+   - NÃO inclua "S/N" no complemento
+
+4. bairro: Deve ser o nome completo do bairro como aparece na fatura
+   - Inclua prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números)
+   - NÃO confunda bairro com rua
+
+5. cidade, estado, cep: Devem vir APENAS da linha do endereço do cliente
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
