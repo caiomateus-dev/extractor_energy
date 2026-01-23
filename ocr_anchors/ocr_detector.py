@@ -43,10 +43,13 @@ class OCRDetector:
                 lang=lang,
                 use_doc_unwarping=False,
                 use_doc_orientation_classify=False,
-                use_textline_orientation=True,
+                use_textline_orientation=False,  # Desabilitado para acelerar (assumimos texto reto)
                 text_det_limit_type="max",
-                text_det_limit_side_len=960,  # Reduzido de 1536 para acelerar (menos qualidade mas mais rápido)
-                text_recognition_batch_size=8,  # Batch processing para acelerar
+                text_det_limit_side_len=768,  # Reduzido para acelerar (suficiente para encontrar âncoras)
+                text_det_thresh=0.3,
+                text_det_box_thresh=0.6,
+                text_rec_score_thresh=0.5,  # Filtrar textos com baixa confiança para acelerar
+                text_recognition_batch_size=16,  # Batch maior para acelerar
             )
         except (ImportError, OSError, Exception) as e:
             error_detail = str(e)
@@ -74,6 +77,15 @@ class OCRDetector:
             List of dicts with keys: 'bbox', 'text', 'score'
             bbox format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
         """
+        # Resize image if too large to speed up OCR (suficiente para encontrar âncoras)
+        w, h = img.size
+        max_dimension = 1536  # Limite máximo de dimensão
+        if w > max_dimension or h > max_dimension:
+            scale = max_dimension / max(w, h)
+            new_w, new_h = int(w * scale), int(h * scale)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+            _log(f"[ocr_anchors] imagem redimensionada para OCR: {w}x{h} -> {new_w}x{new_h}")
+        
         # Convert PIL Image to BGR numpy array (same as ocr.py)
         img_rgb = img.convert('RGB')
         rgb_array = np.array(img_rgb)
@@ -81,10 +93,11 @@ class OCRDetector:
         bgr_array = rgb_array[:, :, ::-1].copy()
         
         # Use predict() method with BGR array (same as ocr.py)
+        # Desabilitar textline_orientation para acelerar
         pred_kwargs = {
             "use_doc_unwarping": False,
             "use_doc_orientation_classify": False,
-            "use_textline_orientation": True,
+            "use_textline_orientation": False,  # Desabilitado para acelerar
         }
         pred = self.ocr.predict(bgr_array, **pred_kwargs)
         
