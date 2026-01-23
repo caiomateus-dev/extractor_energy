@@ -969,65 +969,105 @@ async def extract_energy(
 
     t0 = time.time()
     log(f"[timing] tempo até início inferências: {(t0 - t_start)*1000:.1f}ms")
-    
-    # Prompt para imagem completa (dados gerais)
-    prompt_full = _read_prompt(concessionaria, uf)
-    prompt_full = f"""{prompt_full}
-
-Contexto da requisição: UF={uf}, Concessionária={concessionaria}
-
-Agora analise a imagem e retorne o JSON com os dados extraídos:"""
-    
-    log(f"[prompt] tamanho do prompt completo: {len(prompt_full)} caracteres")
 
     # Resultados das 3 inferências
     result_full = None
     result_customer = None
     result_consumption = None
     
+    # Extrai endereço e consumo PRIMEIRO para usar no prompt da imagem completa
+    payload_customer = {}
+    payload_consumption = {}
+    
+    # Inferência 1: Recorte cliente/endereço (PRIMEIRO)
+    if customer_crop_img is not None:
+        try:
+            t_infer1_start = time.time()
+            log("[infer] iniciando inferência recorte cliente/endereço")
+            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+            result_customer = await _infer_one(customer_crop_img, prompt_customer)
+            t_infer1_end = time.time()
+            log(f"[timing] inferência cliente: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+            
+            # Extrai JSON imediatamente
+            if result_customer:
+                try:
+                    payload_customer = _extract_json(result_customer)
+                    log(f"[infer] JSON cliente/endereço extraído: {json.dumps(payload_customer, ensure_ascii=False)[:200]}")
+                except Exception as e:
+                    log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
+        except Exception as e:
+            log(f"[infer] erro na inferência cliente/endereço: {e}")
+            result_customer = None
+    
+    # Inferência 2: Recorte consumo (SEGUNDO)
+    if consumption_crop_img is not None:
+        try:
+            t_infer2_start = time.time()
+            log("[infer] iniciando inferência recorte consumo")
+            prompt_consumption = _read_consumption_prompt()
+            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+            t_infer2_end = time.time()
+            log(f"[timing] inferência consumo: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
+            
+            # Extrai JSON imediatamente
+            if result_consumption:
+                try:
+                    payload_consumption = _extract_json(result_consumption)
+                    log(f"[infer] JSON consumo extraído: {json.dumps(payload_consumption, ensure_ascii=False)[:200]}")
+                except Exception as e:
+                    log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+        except Exception as e:
+            log(f"[infer] erro na inferência consumo: {e}")
+            result_consumption = None
+    
+    # Inferência 3: Imagem completa (TERCEIRO) - agora com contexto do endereço extraído
+    # Monta prompt com informação do endereço extraído para evitar confusão no nome_cliente
+    prompt_full = _read_prompt(concessionaria, uf)
+    
+    # Adiciona informação do endereço extraído se disponível
+    endereco_contexto = ""
+    if payload_customer:
+        cidade_extraida = payload_customer.get("cidade", "").strip()
+        estado_extraido = payload_customer.get("estado", "").strip()
+        bairro_extraido = payload_customer.get("bairro", "").strip()
+        rua_extraida = payload_customer.get("rua", "").strip()
+        
+        if cidade_extraida or estado_extraido or bairro_extraido or rua_extraida:
+            endereco_contexto = "\n\nIMPORTANTE - CONTEXTO DO ENDEREÇO JÁ EXTRAÍDO:\n"
+            endereco_contexto += "O endereço do cliente já foi extraído e é:\n"
+            if rua_extraida:
+                endereco_contexto += f"- Rua: {rua_extraida}\n"
+            if bairro_extraido:
+                endereco_contexto += f"- Bairro: {bairro_extraido}\n"
+            if cidade_extraida:
+                endereco_contexto += f"- Cidade: {cidade_extraida}\n"
+            if estado_extraido:
+                endereco_contexto += f"- Estado: {estado_extraido}\n"
+            endereco_contexto += "\nCRÍTICO: O campo 'nome_cliente' NÃO deve conter nenhuma dessas informações de endereço.\n"
+            endereco_contexto += "Se você encontrar essas palavras (cidade, estado, bairro, rua) junto com o nome do cliente, extraia APENAS o nome, parando antes dessas informações.\n"
+            endereco_contexto += "O nome_cliente é APENAS o nome da pessoa/empresa, sem qualquer informação geográfica.\n"
+    
+    prompt_full = f"""{prompt_full}{endereco_contexto}
+
+Contexto da requisição: UF={uf}, Concessionária={concessionaria}
+
+Agora analise a imagem e retorne o JSON com os dados extraídos:"""
+    
+    log(f"[prompt] tamanho do prompt completo: {len(prompt_full)} caracteres")
+    
     # Sem _GATE - cada subprocess é independente e pode rodar em paralelo
-    # Inferência 1: Imagem completa (dados gerais)
     try:
-        t_infer1_start = time.time()
+        t_infer3_start = time.time()
         log("[infer] iniciando inferência imagem completa")
         result_full = await _infer_one(img, prompt_full)
-        t_infer1_end = time.time()
-        log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+        t_infer3_end = time.time()
+        log(f"[timing] inferência completa: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
     except Exception as e:
         log(f"[infer] erro na inferência imagem completa: {e}")
         result_full = None
-    
-    # Inferência 2: Recorte cliente/endereço
-    if customer_crop_img is not None:
-        try:
-            t_infer2_start = time.time()
-            log("[infer] iniciando inferência recorte cliente/endereço")
-            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-            result_customer = await _infer_one(customer_crop_img, prompt_customer)
-            t_infer2_end = time.time()
-            log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
-        except Exception as e:
-            log(f"[infer] erro na inferência cliente/endereço: {e}")
-            result_customer = None
-    else:
-        result_customer = None
-    
-    # Inferência 3: Recorte consumo
-    if consumption_crop_img is not None:
-        try:
-            t_infer3_start = time.time()
-            log("[infer] iniciando inferência recorte consumo")
-            prompt_consumption = _read_consumption_prompt()
-            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
-            t_infer3_end = time.time()
-            log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
-        except Exception as e:
-            log(f"[infer] erro na inferência consumo: {e}")
-            result_consumption = None
-    else:
-        result_consumption = None
     
     # Limpa imagens da memória (fora do _GATE para não bloquear outras requisições)
     if img is not None:
@@ -1059,11 +1099,10 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     gc.collect()
 
     # Processa resultados e combina
+    # payload_customer e payload_consumption já foram extraídos acima
     payload_full = {}
-    payload_customer = {}
-    payload_consumption = {}
     
-    # Extrai JSON da inferência completa
+    # Extrai JSON da inferência completa (última a ser processada)
     if result_full:
         try:
             payload_full = _extract_json(result_full)
@@ -1071,22 +1110,6 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
         except Exception as e:
             log(f"[infer] ERRO ao extrair JSON imagem completa: {e}")
             log(f"[infer] resposta completa: {result_full[:500]}")
-    
-    # Extrai JSON do recorte cliente/endereço
-    if result_customer:
-        try:
-            payload_customer = _extract_json(result_customer)
-            log(f"[infer] JSON cliente/endereço extraído: {json.dumps(payload_customer, ensure_ascii=False)[:200]}")
-        except Exception as e:
-            log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
-    
-    # Extrai JSON do recorte consumo
-    if result_consumption:
-        try:
-            payload_consumption = _extract_json(result_consumption)
-            log(f"[infer] JSON consumo extraído: {json.dumps(payload_consumption, ensure_ascii=False)[:200]}")
-        except Exception as e:
-            log(f"[infer] ERRO ao extrair JSON consumo: {e}")
     
     # Combina resultados: dados gerais da imagem completa
     payload = payload_full.copy()
