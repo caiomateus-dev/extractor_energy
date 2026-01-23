@@ -46,7 +46,9 @@ EXTRAÇÃO PASSO A PASSO
 
 3. complemento: 
    - Tudo que vem após a rua e antes do bairro
-   - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos no complemento
+   - CRÍTICO: Se aparecer "Q." (Quadra) no endereço, ela DEVE ser incluída no complemento
+   - CRÍTICO: Se aparecer "L." (Lote) no endereço, ele DEVE ser incluído no complemento
+   - CRÍTICO: Se aparecerem ambos "Q." e "L." no endereço, AMBOS devem estar no complemento
    - CRÍTICO: Leia os números com MUITA ATENÇÃO. NÃO confunda números com "S/N" ou outros textos
    - CRÍTICO: "S/N" é texto que aparece separado e vai no campo numero. NÃO confunda números com "S/N"
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
@@ -64,7 +66,8 @@ EXTRAÇÃO PASSO A PASSO
 5. cidade: 
    - Nome da cidade que aparece ANTES da sigla do estado na linha do endereço
    - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
-   - CRÍTICO: NÃO confunda cidade com bairro. Se você colocou o mesmo valor em cidade e bairro, está ERRADO
+   - CRÍTICO: Bairro e cidade são CAMPOS DIFERENTES. Se você colocou o mesmo valor em ambos, está ERRADO
+   - CRÍTICO: O valor de cidade DEVE ser diferente do valor de bairro. Se forem iguais, você está ERRADO
    - Extraia APENAS da linha do endereço do cliente
    - NÃO use cidade da distribuidora ou outras seções
 
@@ -92,7 +95,9 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
    - "S/N" NUNCA vai em complemento
 
 3. complemento: Elementos após rua e antes do bairro
-   - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos
+   - CRÍTICO: Se aparecer "Q." (Quadra) no endereço, ela DEVE ser incluída no complemento
+   - CRÍTICO: Se aparecer "L." (Lote) no endereço, ele DEVE ser incluído no complemento
+   - CRÍTICO: Se aparecerem ambos "Q." e "L." no endereço, AMBOS devem estar no complemento
    - CRÍTICO: Leia os números com MUITA ATENÇÃO. NÃO confunda números com "S/N" ou outros textos
    - CRÍTICO: "S/N" é texto separado que vai no campo numero. NÃO confunda números com "S/N"
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
@@ -106,9 +111,24 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 5. cidade: Nome da cidade ANTES da sigla do estado
    - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
-   - CRÍTICO: NÃO confunda cidade com bairro. Se você colocou o mesmo valor em ambos, está ERRADO
+   - CRÍTICO: Bairro e cidade são CAMPOS DIFERENTES. Se você colocou o mesmo valor em ambos, está ERRADO
+   - CRÍTICO: O valor de cidade DEVE ser diferente do valor de bairro. Se forem iguais, você está ERRADO
 
 6. estado, cep: APENAS da linha do endereço do cliente
+
+==========================
+VALIDAÇÃO FINAL OBRIGATÓRIA
+==========================
+
+ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
+
+1. complemento: Se aparecer "Q." ou "L." no endereço, eles DEVEM estar no complemento
+   - Se você não incluiu "Q." ou "L." no complemento mas eles aparecem no endereço → ERRO GRAVE
+
+2. bairro e cidade: Eles DEVEM ser diferentes
+   - Se bairro == cidade → ERRO GRAVE. Procure novamente na linha do endereço
+   - Bairro vem antes da cidade na linha do endereço
+   - Se você colocou o mesmo valor em ambos, você está ERRADO
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
