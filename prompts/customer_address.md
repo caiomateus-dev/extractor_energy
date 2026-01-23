@@ -34,6 +34,7 @@ EXTRAÇÃO PASSO A PASSO
 
 1. rua: 
    - Procure no INÍCIO do endereço por uma palavra que começa com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA"
+   - "RUA SEM NOME" é valido
    - Extraia essa palavra e tudo até a primeira vírgula
    - Se não encontrar uma palavra começando com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA" no início, você está ERRADO
    - NÃO inclua Quadra (Q.), Lote (L.), número, apartamento, bairro, cidade no campo rua
@@ -46,22 +47,24 @@ EXTRAÇÃO PASSO A PASSO
 3. complemento: 
    - Tudo que vem após a rua e antes do bairro
    - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos no complemento
-   - CRÍTICO: Leia os números com ATENÇÃO. Se aparecer "L. 11" → extraia "L. 11" (NÃO "L. 5/N", NÃO confunda números com "S/N")
-   - CRÍTICO: Se aparecer "Q. 4, L. 11" → inclua "Q. 4, L. 11" no complemento (leia os números corretamente)
-   - CRÍTICO: Se aparecer "Q. 4, L. 11, APART. 106" → inclua TUDO: "Q. 4, L. 11, APART. 106"
-   - CRÍTICO: NÃO confunda números (como "11") com "S/N". "S/N" é texto separado que vai no campo numero
-   - Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
+   - CRÍTICO: Leia os números com MUITA ATENÇÃO. NÃO confunda números com "S/N" ou outros textos
+   - CRÍTICO: "S/N" é texto que aparece separado e vai no campo numero. NÃO confunda números com "S/N"
+   - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento
    - Se não houver complemento, use "" (string vazia)
 
 4. bairro: 
    - Nome completo do bairro que aparece DEPOIS do complemento na linha do endereço
    - O bairro vem DEPOIS do complemento, NÃO antes
-   - Extraia EXATAMENTE como aparece na fatura, incluindo prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números)
+   - CRÍTICO: Extraia EXATAMENTE como aparece na fatura, incluindo TODOS os caracteres (letras, números, espaços, sufixos)
+   - CRÍTICO: NÃO confunda bairro com cidade. Bairro vem antes da cidade na linha do endereço
+   - Inclua prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números, etc.) se aparecerem
    - O bairro NÃO começa com "RUA" ou "AVENIDA"
 
 5. cidade: 
    - Nome da cidade que aparece ANTES da sigla do estado na linha do endereço
+   - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
+   - CRÍTICO: NÃO confunda cidade com bairro. Se você colocou o mesmo valor em cidade e bairro, está ERRADO
    - Extraia APENAS da linha do endereço do cliente
    - NÃO use cidade da distribuidora ou outras seções
 
@@ -82,7 +85,6 @@ VALIDAÇÃO OBRIGATÓRIA
 ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 1. rua: DEVE começar com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA"
-   -  "RUA SEM NOME" é valido
    - Se não começar com uma dessas palavras → ERRO GRAVE
    - NÃO deve conter bairro, cidade, Quadra, Lote, número, apartamento
 
@@ -91,16 +93,22 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 3. complemento: Elementos após rua e antes do bairro
    - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos
-   - CRÍTICO: Leia os números com ATENÇÃO. Se aparecer "L. 11" → extraia "L. 11" (NÃO confunda com "L. 5/N" ou "S/N")
-   - CRÍTICO: NÃO confunda números (como "11") com "S/N". "S/N" é texto separado
+   - CRÍTICO: Leia os números com MUITA ATENÇÃO. NÃO confunda números com "S/N" ou outros textos
+   - CRÍTICO: "S/N" é texto separado que vai no campo numero. NÃO confunda números com "S/N"
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - NÃO inclua "S/N"
 
 4. bairro: Nome completo como aparece na fatura
-   - Vem DEPOIS do complemento
+   - CRÍTICO: Vem DEPOIS do complemento na linha do endereço
+   - CRÍTICO: Extraia EXATAMENTE como aparece, incluindo TODOS os caracteres (letras, números, espaços, sufixos)
+   - CRÍTICO: NÃO confunda bairro com cidade. Se você colocou o mesmo valor em ambos, está ERRADO
    - NÃO começa com "RUA" ou "AVENIDA"
 
-5. cidade, estado, cep: APENAS da linha do endereço do cliente
+5. cidade: Nome da cidade ANTES da sigla do estado
+   - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
+   - CRÍTICO: NÃO confunda cidade com bairro. Se você colocou o mesmo valor em ambos, está ERRADO
+
+6. estado, cep: APENAS da linha do endereço do cliente
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
