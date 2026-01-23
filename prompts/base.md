@@ -65,4 +65,12 @@ REGRAS IMPORTANTES:
    - PROCESSAMENTO: Identifique onde termina o nome pessoal/empresarial e começa a informação geográfica (cidade/estado/CEP). Extraia SOMENTE a parte do nome, parando antes da primeira informação geográfica identificada.
    - O campo nome_cliente contém EXCLUSIVAMENTE o nome da pessoa física ou razão social da empresa, SEM qualquer informação geográfica
 
-LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
+LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. 
+
+REGRA ABSOLUTA - NÃO INVENTE VALORES:
+- Se você não encontrar explicitamente um campo na fatura, use o valor padrão ("" para strings, null para opcionais, false para booleanos, [] para listas)
+- NÃO extraia valores de campos que não correspondem ao que está sendo solicitado
+- NÃO use valores de outras seções da fatura para preencher campos que não existem
+- Se um campo não existe na fatura (como conta_contrato em algumas concessionárias), use null (NÃO invente um valor)
+- Se não encontrar uma seção específica (como "REAVISO DE VENCIMENTO"), retorne valores vazios ([] para listas, false para booleanos)
+- É MELHOR retornar valores vazios/null do que inventar valores incorretos

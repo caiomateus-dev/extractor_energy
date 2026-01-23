@@ -13,6 +13,7 @@ LOCALIZAÇÃO DOS CAMPOS
    - Formato: números simples sem máscara (ex: "102899830")
    - Aparece sempre em uma caixa laranja/amarela destacada no topo direito, abaixo do código da instalação
    - Se não encontrar explicitamente, use null
+   - ATENÇÃO: O campo "Parceiro de Negócio" NÃO é conta_contrato. NÃO use esse valor para conta_contrato.
 
 3. classificacao: Procure próximo a "Classificacao:" na seção de dados do cliente.
    - Valores comuns: "RESIDENCIAL RESIDENCIAL NORMAL", "RESIDENCIAL"
@@ -70,6 +71,8 @@ VALORES EM ABERTO
 ==========================
 
 REGRA CRÍTICA: valores_em_aberto contém APENAS débitos de meses ANTERIORES ao mes_referencia.
+
+ATENÇÃO: NÃO invente valores. Se você não encontrar uma seção clara de "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" com débitos listados, retorne valores_em_aberto = [] e faturas_venc = false.
 
 ONDE PROCURAR:
 - Procure APENAS na seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
@@ -143,14 +146,20 @@ REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL:
 - numero: Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero` (NUNCA em `complemento`). Se houver um número de endereço explícito, extraia-o.
 - complemento: Use para informações como Quadra (Q.), Lote (L.), Bloco, Apto, etc. Se aparecer "S/N" junto com complemento, extraia apenas o complemento (sem o S/N).
 - bairro: Nome completo do bairro incluindo prefixos como "VILA", "JARDIM", "CONJUNTO", etc.
-- cep: Procure por "CEP:" seguido de números. Extraia apenas os números (sem formatação). NÃO use valores de outras partes da fatura.
-- cidade: Nome da cidade que aparece ANTES da sigla do estado. NÃO confunda com outras cidades que possam aparecer na fatura.
-- estado: Sigla de 2 letras que aparece após o nome da cidade.
+- cep: Procure por "CEP:" seguido de números na linha do endereço. Extraia apenas os números (sem formatação). NÃO use valores de outras partes da fatura (como CEPs de outras seções).
+- cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. NÃO confunda com outras cidades que possam aparecer em outras partes da fatura (como cidade da distribuidora).
+- estado: Sigla de 2 letras que aparece após o nome da cidade na linha do endereço.
+
+REGRA CRÍTICA PARA ENDEREÇO:
+- Extraia APENAS os dados que aparecem na linha do endereço do cliente
+- NÃO use valores de outras seções da fatura (como cidade da distribuidora, CEPs de outras partes, etc.)
+- Se não encontrar algum campo na linha do endereço, use "" (string vazia)
 
 ==========================
 OBRIGATORIO
 ==========================
 
 - distribuidora: sempre "EQUATORIAL"
-- conta_contrato: sempre null (não aparece explicitamente)
+- conta_contrato: SEMPRE null (NÃO existe este campo nesta fatura. NÃO extraia "Parceiro de Negócio" ou qualquer outro número como conta_contrato. Se você extrair qualquer valor aqui, está ERRADO. Use APENAS null)
 - NÃO invente valores. Se não encontrar, use "" ou null conforme o tipo
+- REGRA CRÍTICA: Se você não encontrar explicitamente um campo na fatura, NÃO invente. Use o valor padrão ("" para strings, null para opcionais, false para booleanos, [] para listas)

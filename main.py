@@ -441,7 +441,7 @@ def _normalize_cep(cep: str) -> str:
     return cep
 
 
-def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict[str, Any]:
+def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str, uf: str = "") -> Dict[str, Any]:
     template: Dict[str, Any] = {
         "cod_cliente": "",
         "conta_contrato": "",
@@ -536,6 +536,15 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
             consumo_int = 0
         consumo_cleaned.append({"mes_ano": mes_ano, "consumo": consumo_int})
     out["consumo_lista"] = consumo_cleaned
+
+    # Aplica regras específicas por concessionária/UF
+    concessionaria_key = _key(concessionaria_input)
+    uf_key = _key(uf)
+    
+    # Equatorial GO: conta_contrato sempre null
+    if concessionaria_key == "equatorial" and uf_key == "go":
+        out["conta_contrato"] = None
+        log(f"[validation] aplicada regra: conta_contrato = null para {concessionaria_input}/{uf}")
 
     return out
 
@@ -1171,7 +1180,7 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             # Se payload_full não tem dados, usa o crop mesmo que vazio
             payload["consumo_lista"] = consumo_crop
     
-    payload = _ensure_contract(payload, concessionaria_input=concessionaria)
+    payload = _ensure_contract(payload, concessionaria_input=concessionaria, uf=uf)
 
     ms = int((time.time() - t0) * 1000)
     log(f"[req] concessionaria={concessionaria.lower()} uf={uf.upper()} ms={ms}")
