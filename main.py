@@ -326,6 +326,11 @@ def _extract_json(text: str) -> Dict[str, Any] | list:
     Retorna dict ou list dependendo do formato do JSON encontrado."""
     text = text.strip()
     
+    # Remove blocos markdown ```json ... ```
+    text = re.sub(r'```json\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    
     # Remove linhas com mensagens de deprecação ou avisos
     lines = text.split('\n')
     filtered_lines = []
