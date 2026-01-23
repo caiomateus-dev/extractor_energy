@@ -82,7 +82,8 @@ class OCRDetector:
         
         try:
             # Use file path - most reliable method according to docs
-            result = self.ocr.ocr(temp_img_path, cls=False)
+            # Don't pass cls parameter - newer versions don't support it
+            result = self.ocr.ocr(temp_img_path)
             
             if not result or not result[0]:
                 return []
