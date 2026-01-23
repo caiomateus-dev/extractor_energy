@@ -46,9 +46,15 @@ IMPORTANTE:
 - Extraia TODOS os meses que aparecem na tabela de consumo (até 13 itens)
 - CRÍTICO: Se a tabela tem mais de 13 meses, extraia APENAS os 13 mais recentes e PARE imediatamente!
 - CRÍTICO: NÃO gere mais de 13 itens. Se você gerar 14, 15, 20 ou mais itens, sua resposta está COMPLETAMENTE ERRADA!
+- CRÍTICO ABSOLUTO: Extraia APENAS os meses que REALMENTE aparecem na tabela. NÃO invente meses!
+- CRÍTICO ABSOLUTO: Se a tabela mostra apenas 6 meses, retorne apenas 6 meses. Se mostra 12 meses, retorne 12 meses.
+- CRÍTICO ABSOLUTO: NÃO invente meses sequenciais (01, 02, 03, 04, 05...). Use APENAS os meses que estão escritos na tabela!
+- CRÍTICO ABSOLUTO: Se a tabela não mostra "02/2025", NÃO inclua "02/2025" na resposta. Inclua APENAS os meses que aparecem na tabela!
 - Extraia os meses EXATAMENTE como aparecem na tabela, na ordem que aparecem
 - NÃO invente meses sequenciais (01, 02, 03...). Use os meses reais da tabela
 - NÃO extraia apenas 1 mês - extraia TODA a tabela de histórico de consumo (até 13 itens)
+- Se a tabela mostra meses em formato abreviado (OUT/25, SET/25), converta para MM/AAAA (10/2025, 09/2025)
+- Mas só converta e inclua os meses que REALMENTE aparecem na tabela. NÃO invente meses que não estão lá!
 - Mantenha a ordem da tabela (geralmente do mais recente para o mais antigo)
 - Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
 - Cada entrada deve ter o mês/ano EXATO da tabela e o consumo correspondente em kWh (número inteiro)
@@ -96,3 +102,19 @@ Retorne os valores EXATOS de cada mês:
 {"mes_ano": "01/2025", "consumo": 140},
 {"mes_ano": "02/2025", "consumo": 90},   ← CORRETO
 {"mes_ano": "03/2025", "consumo": 83}    ← CORRETO
+
+EXEMPLO DE ERRO GRAVE DE INVENÇÃO DE MESES (NÃO FAÇA ISSO):
+Se a tabela mostra APENAS:
+OUT/24: 74 kWh
+SET/24: 68 kWh
+AGO/24: 72 kWh
+
+NÃO invente meses que não estão na tabela:
+{"mes_ano": "10/2024", "consumo": 74},
+{"mes_ano": "11/2024", "consumo": 68},  ← ERRADO! Novembro não está na tabela!
+{"mes_ano": "12/2024", "consumo": 72}   ← ERRADO! Dezembro não está na tabela!
+
+Retorne APENAS os meses que aparecem na tabela:
+{"mes_ano": "10/2024", "consumo": 74},  ← CORRETO (OUT/24 convertido)
+{"mes_ano": "09/2024", "consumo": 68},  ← CORRETO (SET/24 convertido)
+{"mes_ano": "08/2024", "consumo": 72}   ← CORRETO (AGO/24 convertido)
