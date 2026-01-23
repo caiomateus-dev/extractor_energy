@@ -891,21 +891,40 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
             else:
                 # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
+                # Remove mensagens de deprecação primeiro
+                cleaned_output = output
+                lines = cleaned_output.split('\n')
+                filtered_lines = []
+                for line in lines:
+                    line_lower = line.lower().strip()
+                    # Pula linhas de deprecação
+                    if any(x in line_lower for x in ['deprecated', 'calling', 'python -m']):
+                        continue
+                    filtered_lines.append(line)
+                cleaned_output = '\n'.join(filtered_lines).strip()
+                
                 # Encontra todas as posições de '{' e tenta extrair JSON completo de cada uma
                 json_candidates = []
                 pos = 0
                 while True:
-                    pos = output.find('{', pos)
+                    pos = cleaned_output.find('{', pos)
                     if pos == -1:
                         break
-                    balanced_json = _find_balanced_json(output[pos:], '{')
+                    balanced_json = _find_balanced_json(cleaned_output[pos:], '{')
                     if balanced_json:
-                        json_candidates.append((pos, balanced_json))
+                        # Valida se é JSON válido
+                        try:
+                            parsed = json.loads(balanced_json)
+                            json_candidates.append((pos, balanced_json, len(str(parsed))))
+                        except json.JSONDecodeError:
+                            pass
                     pos += 1
                 
                 if json_candidates:
-                    # Pega o último JSON encontrado (deve ser a resposta do modelo)
-                    _, filtered_output = json_candidates[-1]
+                    # Pega o JSON MAIOR (deve ser a resposta completa do modelo)
+                    # Ordena por tamanho e pega o maior
+                    json_candidates.sort(key=lambda x: x[2], reverse=True)
+                    _, filtered_output, _ = json_candidates[0]
                     # Remove delimitadores markdown se houver
                     filtered_output = re.sub(r'^```json\s*', '', filtered_output, flags=re.MULTILINE)
                     filtered_output = re.sub(r'\s*```$', '', filtered_output, flags=re.MULTILINE)
@@ -914,7 +933,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                     filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
                 else:
                     # Último recurso: retorna o output completo
-                    filtered_output = output
+                    filtered_output = cleaned_output
             
             return filtered_output
         finally:
