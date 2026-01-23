@@ -65,30 +65,72 @@ class OCRDetector:
             List of dicts with keys: 'bbox', 'text', 'score'
             bbox format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
         """
-        # Convert PIL to numpy array
-        img_array = np.array(img.convert('RGB'))
+        # Save image temporarily to use with PaddleOCR
+        import tempfile
+        import os
         
-        # Run OCR
-        result = self.ocr.ocr(img_array, cls=False)
+        temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        try:
+            img.save(temp_img.name, format='JPEG', quality=95)
+            temp_img_path = temp_img.name
+        except Exception:
+            temp_img.close()
+            raise
         
-        if not result or not result[0]:
-            return []
-        
-        boxes = []
-        for line in result[0]:
-            if len(line) >= 2:
-                bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                text_info = line[1]
-                text = text_info[0] if isinstance(text_info, (list, tuple)) else str(text_info)
-                score = text_info[1] if isinstance(text_info, (list, tuple)) and len(text_info) > 1 else 1.0
+        try:
+            # Try new API (v3.x) first - uses predict()
+            if hasattr(self.ocr, 'predict'):
+                result = self.ocr.predict(input=temp_img_path)
+                # New API returns list of result objects
+                if not result or len(result) == 0:
+                    return []
                 
-                boxes.append({
-                    'bbox': bbox,
-                    'text': text,
-                    'score': score
-                })
-        
-        return boxes
+                # Extract from first result
+                ocr_result = result[0]
+                if hasattr(ocr_result, 'ocr_result'):
+                    # New format: ocr_result.ocr_result is a list
+                    ocr_data = ocr_result.ocr_result
+                elif isinstance(ocr_result, dict) and 'ocr_result' in ocr_result:
+                    ocr_data = ocr_result['ocr_result']
+                else:
+                    ocr_data = ocr_result if isinstance(ocr_result, list) else []
+                
+                boxes = []
+                for item in ocr_data:
+                    if isinstance(item, dict):
+                        boxes.append({
+                            'bbox': item.get('bbox', []),
+                            'text': item.get('text', ''),
+                            'score': item.get('score', 0.0)
+                        })
+                return boxes
+            
+            # Fallback to old API (v2.x) - uses ocr()
+            result = self.ocr.ocr(temp_img_path, cls=False)
+            
+            if not result or not result[0]:
+                return []
+            
+            boxes = []
+            for line in result[0]:
+                if len(line) >= 2:
+                    bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                    text_info = line[1]
+                    text = text_info[0] if isinstance(text_info, (list, tuple)) else str(text_info)
+                    score = text_info[1] if isinstance(text_info, (list, tuple)) and len(text_info) > 1 else 1.0
+                    
+                    boxes.append({
+                        'bbox': bbox,
+                        'text': text,
+                        'score': score
+                    })
+            
+            return boxes
+        finally:
+            try:
+                os.unlink(temp_img_path)
+            except Exception:
+                pass
     
     def get_bbox_bounds(self, bbox: List[List[float]]) -> Tuple[int, int, int, int]:
         """Convert bbox to (x_min, y_min, x_max, y_max) format
