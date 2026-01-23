@@ -999,25 +999,35 @@ async def extract_energy(
             if result_consumption:
                 try:
                     extracted = _extract_json(result_consumption)
+                    log(f"[consumo] resultado extraído (tipo: {type(extracted).__name__}): {extracted}")
+                    
                     # O modelo deve retornar apenas o array: [{...}, {...}]
                     # Mas pode retornar como objeto: {"consumo_lista": [...]} ou formato individual
                     if isinstance(extracted, list):
                         # Já é um array - formato correto
                         payload_consumption = {'consumo_lista': extracted}
+                        log(f"[consumo] array direto detectado: {len(extracted)} itens")
                     elif isinstance(extracted, dict):
                         if 'consumo_lista' in extracted:
                             # Formato {"consumo_lista": [...]}
                             payload_consumption = extracted
+                            consumo_count = len(extracted['consumo_lista']) if isinstance(extracted['consumo_lista'], list) else 0
+                            log(f"[consumo] objeto com consumo_lista detectado: {consumo_count} itens")
                         elif 'mes_ano' in extracted and 'consumo' in extracted:
                             # Formato individual {"mes_ano": "...", "consumo": 123}
                             payload_consumption = {'consumo_lista': [extracted]}
+                            log(f"[consumo] AVISO: formato individual detectado, convertido para lista com 1 item")
                         else:
                             # Formato desconhecido
                             payload_consumption = {'consumo_lista': []}
+                            log(f"[consumo] AVISO: formato desconhecido. Keys: {list(extracted.keys()) if isinstance(extracted, dict) else 'N/A'}")
                     else:
                         payload_consumption = {'consumo_lista': []}
+                        log(f"[consumo] AVISO: tipo não reconhecido: {type(extracted)}")
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+                    import traceback
+                    log(f"[infer] traceback: {traceback.format_exc()}")
                     payload_consumption = {'consumo_lista': []}
         except Exception as e:
             log(f"[infer] erro na inferência consumo: {e}")
