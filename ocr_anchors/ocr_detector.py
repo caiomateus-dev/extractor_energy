@@ -9,8 +9,9 @@ import numpy as np
 try:
     from paddleocr import PaddleOCR
     _HAS_PADDLEOCR = True
-except ImportError:
+except (ImportError, OSError, Exception) as e:
     _HAS_PADDLEOCR = False
+    _PADDLEOCR_ERROR = str(e)
 
 
 class OCRDetector:
@@ -23,14 +24,36 @@ class OCRDetector:
             lang: Language code ('pt' for Portuguese, 'en' for English)
         """
         if not _HAS_PADDLEOCR:
-            raise RuntimeError("PaddleOCR not installed. Install with: pip install paddleocr")
+            error_msg = _PADDLEOCR_ERROR if '_PADDLEOCR_ERROR' in globals() else "Unknown error"
+            raise RuntimeError(
+                f"PaddleOCR não está disponível. "
+                f"Erro: {error_msg}\n"
+                f"Verifique se PaddleOCR e PaddlePaddle estão instalados corretamente.\n"
+                f"No macOS, pode ser necessário instalar dependências do sistema ou usar Docker."
+            )
         
-        # Initialize OCR with detection and recognition
-        # use_angle_cls=False for faster processing (we assume upright text)
-        self.ocr = PaddleOCR(
-            use_angle_cls=False,
-            lang=lang
-        )
+        try:
+            # Initialize OCR with detection and recognition
+            # use_angle_cls=False for faster processing (we assume upright text)
+            self.ocr = PaddleOCR(
+                use_angle_cls=False,
+                lang=lang
+            )
+        except (ImportError, OSError, Exception) as e:
+            error_detail = str(e)
+            # Check if it's a library loading error
+            if "Library not loaded" in error_detail or "dlopen" in error_detail:
+                missing_lib = "biblioteca nativa"
+                if "netcdf" in error_detail.lower():
+                    missing_lib = "netcdf"
+                raise RuntimeError(
+                    f"Falha ao inicializar PaddleOCR: {error_detail}\n"
+                    f"Pode ser necessário instalar dependências do sistema.\n"
+                    f"Se o erro mencionar uma biblioteca específica, instale-a via Homebrew."
+                ) from e
+            raise RuntimeError(
+                f"Falha ao inicializar PaddleOCR: {error_detail}"
+            ) from e
     
     def detect_text_boxes(self, img: Image.Image) -> List[Dict[str, Any]]:
         """Detect text bounding boxes and extract text from image

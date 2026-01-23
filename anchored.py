@@ -100,12 +100,20 @@ _TILING_FALLBACK: Optional[TilingFallback] = None
 _OBJECT_DETECTOR: Optional[ObjectDetection] = None
 
 
-def get_ocr_detector() -> OCRDetector:
-    """Get or create OCR detector (singleton)"""
+def get_ocr_detector() -> Optional[OCRDetector]:
+    """Get or create OCR detector (singleton)
+    
+    Returns:
+        OCRDetector instance or None if unavailable
+    """
     global _OCR_DETECTOR
     if _OCR_DETECTOR is None:
-        _OCR_DETECTOR = OCRDetector(lang="pt")
-        log_main("[ocr_anchors] OCR detector inicializado")
+        try:
+            _OCR_DETECTOR = OCRDetector(lang="pt")
+            log_main("[ocr_anchors] OCR detector inicializado")
+        except (RuntimeError, ImportError, OSError, Exception) as e:
+            log_main(f"[ocr_anchors] AVISO: OCR não disponível: {e}")
+            _OCR_DETECTOR = None  # Explicitly set to None to avoid retrying
     return _OCR_DETECTOR
 
 
@@ -172,9 +180,18 @@ async def extract_fields_via_anchors(
     log_main("[ocr_anchors] executando OCR...")
     t_ocr_start = time.time()
     ocr_detector = get_ocr_detector()
-    ocr_results = ocr_detector.detect_text_boxes(img)
-    t_ocr_end = time.time()
-    log_main(f"[ocr_anchors] OCR concluído: {len(ocr_results)} textos encontrados em {(t_ocr_end - t_ocr_start)*1000:.1f}ms")
+    
+    if ocr_detector is None:
+        log_main("[ocr_anchors] OCR não disponível, pulando detecção de âncoras")
+        return results
+    
+    try:
+        ocr_results = ocr_detector.detect_text_boxes(img)
+        t_ocr_end = time.time()
+        log_main(f"[ocr_anchors] OCR concluído: {len(ocr_results)} textos encontrados em {(t_ocr_end - t_ocr_start)*1000:.1f}ms")
+    except Exception as e:
+        log_main(f"[ocr_anchors] Erro ao executar OCR: {e}")
+        return results
     
     if not ocr_results:
         log_main("[ocr_anchors] AVISO: Nenhum texto detectado pelo OCR")
