@@ -326,17 +326,18 @@ def _extract_json(text: str) -> Dict[str, Any] | list:
     Retorna dict ou list dependendo do formato do JSON encontrado."""
     text = text.strip()
     
-    # Remove blocos markdown ```json ... ```
-    text = re.sub(r'```json\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
-    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    # Remove blocos markdown ```json ... ``` (faz antes de filtrar linhas)
+    # Remove tanto ```json quanto ``` sozinho
+    text = re.sub(r'```json\s*\n?', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\n?\s*```\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^\s*```\s*\n?', '', text, flags=re.MULTILINE | re.IGNORECASE)
     
     # Remove linhas com mensagens de deprecação ou avisos
     lines = text.split('\n')
     filtered_lines = []
     skip_until_json = False
     for line in lines:
-        line_lower = line.lower()
+        line_lower = line.lower().strip()
         # Pula linhas de deprecação, avisos, ou separadores
         if any(x in line_lower for x in ['deprecated', 'calling', 'python -m', '==========', 'files:', 'prompt:']):
             skip_until_json = True
@@ -372,7 +373,43 @@ def _extract_json(text: str) -> Dict[str, Any] | list:
         except json.JSONDecodeError:
             pass
     
-    # Procura por objeto JSON no texto
+    # Procura por objeto JSON no texto (usando método mais robusto para objetos aninhados)
+    # Tenta encontrar o JSON completo com chaves balanceadas
+    json_start = text.find('{')
+    if json_start != -1:
+        # Encontra o JSON completo com chaves balanceadas
+        depth = 0
+        in_string = False
+        escape_next = False
+        json_end = -1
+        
+        for i in range(json_start, len(text)):
+            char = text[i]
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+            if not in_string:
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        json_end = i + 1
+                        break
+        
+        if json_end > json_start:
+            json_str = text[json_start:json_end]
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+    
+    # Fallback: procura por objeto JSON simples
     m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
     if m:
         try:
@@ -1065,12 +1102,23 @@ async def extract_energy(
             # Extrai JSON imediatamente
             if result_consumption:
                 try:
+                    log(f"[consumo] chamando _extract_json...")
                     payload_consumption = _extract_json(result_consumption)
+                    log(f"[consumo] resultado do _extract_json: {payload_consumption}")
+                    log(f"[consumo] tipo: {type(payload_consumption)}")
+                    log(f"[consumo] tem consumo_lista? {isinstance(payload_consumption, dict) and 'consumo_lista' in payload_consumption}")
+                    
                     # Garante que tem consumo_lista
                     if not isinstance(payload_consumption, dict) or 'consumo_lista' not in payload_consumption:
+                        log(f"[consumo] AVISO: payload_consumption não tem consumo_lista. Keys: {list(payload_consumption.keys()) if isinstance(payload_consumption, dict) else 'N/A'}")
                         payload_consumption = {'consumo_lista': []}
+                    else:
+                        consumo_count = len(payload_consumption['consumo_lista']) if isinstance(payload_consumption.get('consumo_lista'), list) else 0
+                        log(f"[consumo] consumo_lista extraída com sucesso: {consumo_count} itens")
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+                    import traceback
+                    log(f"[infer] traceback: {traceback.format_exc()}")
                     payload_consumption = {'consumo_lista': []}
         except Exception as e:
             log(f"[infer] erro na inferência consumo: {e}")
