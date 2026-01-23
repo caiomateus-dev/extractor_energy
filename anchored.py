@@ -176,39 +176,10 @@ async def extract_fields_via_anchors(
     """
     results = {}
     
-    # Step 1: Run OCR to get text boxes
-    log_main("[ocr_anchors] executando OCR...")
-    t_ocr_start = time.time()
-    ocr_detector = get_ocr_detector()
-    
-    if ocr_detector is None:
-        log_main("[ocr_anchors] OCR não disponível, pulando detecção de âncoras")
-        return results
-    
-    ocr_results = []
-    ocr_time_ms = 0.0
-    try:
-        ocr_results = ocr_detector.detect_text_boxes(img)
-        t_ocr_end = time.time()
-        ocr_time_ms = (t_ocr_end - t_ocr_start) * 1000
-        log_main(f"[ocr_anchors] OCR concluído: {len(ocr_results)} textos encontrados em {ocr_time_ms:.1f}ms")
-        
-        # Log first few texts for debugging
-        if ocr_results:
-            sample_texts = [r['text'][:50] for r in ocr_results[:5]]
-            log_main(f"[ocr_anchors] Exemplos de textos encontrados: {sample_texts}")
-    except Exception as e:
-        log_main(f"[ocr_anchors] Erro ao executar OCR: {e}")
-        return results
-    
-    if not ocr_results:
-        log_main("[ocr_anchors] AVISO: Nenhum texto detectado pelo OCR")
-        return results
-    
-    # Skip OCR anchor detection if it took too long (>10s) - not worth it
-    if ocr_time_ms > 10000:
-        log_main(f"[ocr_anchors] OCR muito lento ({ocr_time_ms:.1f}ms), pulando detecção de âncoras")
-        return results
+    # Step 1: OCR DESABILITADO - está retornando caracteres individuais e é muito lento
+    # Pula direto para usar apenas YOLO crops + full-image inference
+    log_main("[ocr_anchors] OCR desabilitado (ineficiente), usando apenas YOLO + full-image")
+    return results
     
     # Step 2: Find anchors for each field
     anchor_detector = get_anchor_detector()
@@ -370,26 +341,9 @@ async def extract_energy(
         'num_instalacao',
     ]
     
-    # Step 1: Extract fields via OCR anchors (pode ser lento)
-    t_anchors_start = time.time()
-    anchor_results = await extract_fields_via_anchors(img, anchor_fields)
-    t_anchors_end = time.time()
-    anchor_time_ms = (t_anchors_end - t_anchors_start) * 1000
-    log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
-    payload.update(anchor_results)
-    
-    # Step 2: Fallback for missing fields via tiling (limitado se OCR foi ineficiente)
-    missing_fields = [f for f in anchor_fields if not payload.get(f)]
-    if missing_fields:
-        # Se OCR demorou muito e não encontrou nada, pula tiling também
-        if anchor_time_ms > 5000 and not anchor_results:
-            log_main(f"[ocr_anchors] OCR ineficiente ({anchor_time_ms:.1f}ms sem resultados), pulando tiling")
-        else:
-            t_tiling_start = time.time()
-            tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
-            t_tiling_end = time.time()
-            log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
-            payload.update(tiling_results)
+    # Step 1: OCR/Tiling desabilitado - muito lento e ineficiente
+    # Vamos direto para YOLO crops + full-image inference que funciona bem
+    log_main("[ocr_anchors] pulando OCR/tiling, usando YOLO + full-image inference")
     
     # Step 3: Use YOLO for customer address and consumption (keep existing logic)
     customer_crop_img = None
@@ -446,8 +400,9 @@ async def extract_energy(
     # Step 4: Use full image inference for remaining fields
     # Fields that need full context or weren't found via anchors
     remaining_fields_needed = [
-        'classificacao', 'tipo_instalacao', 'tensao_nominal',
-        'nome_cliente', 'valores_em_aberto', 'faturas_venc',
+        'vencimento', 'mes_referencia', 'valor_fatura', 'aliquota_icms',
+        'cod_cliente', 'num_instalacao', 'classificacao', 'tipo_instalacao', 
+        'tensao_nominal', 'nome_cliente', 'valores_em_aberto', 'faturas_venc',
         'baixa_renda', 'tarifa_branca', 'ths_verde',
         'energia_ativa_injetada', 'energia_reativa',
         'orgao_publico', 'parcelamentos', 'alta_tensao',
@@ -457,20 +412,23 @@ async def extract_energy(
     missing_remaining = [f for f in remaining_fields_needed if f not in payload or not payload.get(f)]
     
     if missing_remaining:
+        # Resize image if too large (same logic as main.py)
+        img_for_inference = img
+        w, h = img.size
+        pixels = w * h
+        if pixels > settings.max_pixels:
+            scale = (settings.max_pixels / float(pixels)) ** 0.5
+            nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+            img_for_inference = img.resize((nw, nh), Image.LANCZOS)
+            log_main(f"[ocr_anchors] imagem redimensionada: {w}x{h} -> {nw}x{nh} ({pixels:,} -> {nw*nh:,} pixels)")
+        
         # Use full image inference with base prompt for remaining fields
         try:
             prompt_full = _read_prompt(concessionaria, uf)
-            # Add context about already extracted fields
-            context = "\n\nCAMPOS JÁ EXTRAÍDOS (use estes valores se não encontrar na imagem):\n"
-            for key, value in payload.items():
-                if value and key in ['vencimento', 'mes_referencia', 'valor_fatura', 'aliquota_icms', 'cod_cliente', 'num_instalacao']:
-                    context += f"- {key}: {value}\n"
-            
-            prompt_with_context = prompt_full + context
-            result_full = await _infer_one_full(img, prompt_with_context)
+            result_full = await _infer_one_full(img_for_inference, prompt_full)
             payload_full = _extract_json(result_full)
             
-            # Merge remaining fields (don't overwrite anchor-extracted fields)
+            # Merge remaining fields (don't overwrite existing fields)
             for key in missing_remaining:
                 if key in payload_full and payload_full[key]:
                     payload[key] = payload_full[key]
