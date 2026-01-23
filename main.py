@@ -1024,10 +1024,8 @@ async def extract_energy(
         try:
             t_infer1_start = time.time()
             log("[infer] iniciando inferência recorte cliente/endereço")
-            # Aplica pré-processamento de contraste na imagem de endereço
-            customer_crop_img_enhanced = _enhance_address_image(customer_crop_img)
             prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-            result_customer = await _infer_one(customer_crop_img_enhanced, prompt_customer)
+            result_customer = await _infer_one(customer_crop_img, prompt_customer)
             t_infer1_end = time.time()
             log(f"[timing] inferência cliente: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
             
