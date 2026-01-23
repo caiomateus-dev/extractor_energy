@@ -79,10 +79,31 @@ consumo_lista: Procure na seção de histórico de consumo (geralmente não apar
 - consumo: número inteiro em kWh
 
 ==========================
+ENDEREÇO - REGRAS ESPECÍFICAS EQUATORIAL
+==========================
+
+REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL:
+- numero: Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero` (NÃO em `complemento`)
+- complemento: Use apenas para informações como "L. 22", "Q. 3", "Bloco A", "Apto 101", etc.
+- Se aparecer "L. 22, S/N", extraia:
+  - numero: "S/N"
+  - complemento: "L. 22"
+- Se aparecer apenas "S/N" sem outras informações, extraia:
+  - numero: "S/N"
+  - complemento: ""
+
+==========================
+CONTA CONTRATO
+==========================
+
+conta_contrato: Procure por "Conta Contrato" ou similar na fatura.
+- Se encontrar explicitamente, extraia o valor
+- Se não encontrar, use null
+- NÃO invente valores
+
+==========================
 OBRIGATORIO
 ==========================
 
 - distribuidora: sempre "EQUATORIAL"
-- conta_contrato: sempre null
-- complemento: sempre ""
 - NÃO invente valores. Se não encontrar, use "" ou null conforme o tipo
