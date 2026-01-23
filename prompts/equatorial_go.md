@@ -71,10 +71,50 @@ VALORES EM ABERTO
 
 REGRA CRÍTICA: valores_em_aberto contém APENAS débitos de meses ANTERIORES ao mes_referencia.
 
-ATENÇÃO: Na maioria das faturas, não há débitos anteriores. Se você não encontrar uma LISTA CLARA de débitos, então valores_em_aberto = [] e faturas_venc = false.
+ONDE PROCURAR:
+- Procure APENAS na seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
+- Na seção "REAVISO DE VENCIMENTO", procure por linhas como:
+  - "NOTIFICAÇÃO: X FATURA(S)"
+  - "UNIDADE VENCIDA: MES X/AAAA VALOR TOTAL: R$ XXX,XX"
+  - "MES X/AAAA VALOR TOTAL: R$ XXX,XX"
+- Esta seção geralmente aparece no meio ou rodapé da fatura
+- NUNCA use valores de outras seções da fatura (como aliquota_icms, valores faturados, tabelas de consumo, etc.)
+- NUNCA invente valores se a seção não existir ou estiver vazia
+
+VALIDAÇÃO OBRIGATÓRIA - SIGA ESTES PASSOS EM ORDEM:
+
+PASSO 1: LOCALIZE a seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
+- Se NÃO encontrar essa seção → valores_em_aberto = [], faturas_venc = false → PARE AQUI
+
+PASSO 2: VERIFIQUE se a seção está VAZIA:
+- Se a seção existir mas não tiver NENHUMA informação de fatura vencida listada
+- Se não houver nenhum mês/ano e valor listados na seção
+→ valores_em_aberto = [], faturas_venc = false → PARE AQUI
+
+PASSO 3: Se a seção tiver FATURAS VENCIDAS LISTADAS:
+   → Para cada fatura vencida EXPLICITAMENTE listada na seção:
+     - mes_ano: formato "MM/AAAA" (deve aparecer na linha, ex: "MES 5/2025" → "05/2025")
+     - valor: número float do valor do débito em R$ (deve aparecer na mesma linha, ex: "VALOR TOTAL: R$ 506,94" → 506.94)
+   → VALIDAÇÃO CRÍTICA: O valor deve ser um valor de FATURA (geralmente dezenas ou centenas de reais)
+   → Compare mes_ano com mes_referencia:
+     - Se forem IGUAIS → IGNORE completamente (é a fatura atual)
+     - Se for ANTERIOR → adicione em valores_em_aberto
+     - Se for FUTURO → IGNORE
+   → Se houver ao menos um débito anterior válido → faturas_venc = true
+   → Se todos forem da fatura atual ou nenhum válido → valores_em_aberto = [], faturas_venc = false
+
+VALIDAÇÃO FINAL OBRIGATÓRIA - ANTES DE RETORNAR O JSON, VERIFIQUE:
+
+1. Se você não encontrou uma seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" com débitos listados → valores_em_aberto = [] e faturas_venc = false
+
+2. Se a seção existir mas estiver VAZIA → valores_em_aberto = [] e faturas_venc = false
+
+3. Se valores_em_aberto contiver o mes_referencia atual → valores_em_aberto = [] e faturas_venc = false (isso está ERRADO)
 
 REGRA ABSOLUTA:
 - Na dúvida, retorne valores_em_aberto = [] e faturas_venc = false
+- É melhor retornar vazio do que retornar valores errados
+- NUNCA invente valores
 
 ==========================
 CONSUMO HISTÓRICO
