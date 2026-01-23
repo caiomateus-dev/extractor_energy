@@ -46,10 +46,13 @@ LOCALIZAÇÃO DOS CAMPOS
    - Converta vírgula para ponto (ex: "180,24" → 180.24)
 
 7. vencimento: Próximo a "Vencimento" em caixa amarela no lado direito, próximo ao "Total a pagar". Formato: "DD/MM/AAAA"
+   - CRÍTICO: Este campo está na PARTE SUPERIOR da fatura, próximo ao valor total
 
 8. proximo_leitura: Próximo a "Próxima Leitura" na seção "Datas das Leituras" ou tabela de leituras.
+   - CRÍTICO: Este campo está na PARTE INFERIOR/MÉDIA da fatura, na tabela de leituras do medidor
+   - CRÍTICO: NUNCA use o mesmo valor de "vencimento" - são campos diferentes em locais diferentes
    - Formato: "DD/MM/AAAA"
-   - Se não encontrar, use "" (string vazia)
+   - Se não encontrar explicitamente "Próxima Leitura" na tabela de leituras, use "" (string vazia)
 
 9. aliquota_icms: Procure na tabela "Datas das Leituras", na coluna "Aliquota ICMS(%)".
    - Valores comuns: 19.00
@@ -59,6 +62,22 @@ LOCALIZAÇÃO DOS CAMPOS
 10. tensao_nominal: Procure próximo a "Tensão Nom.:" na seção de dados do cliente.
     - Formato: número seguido de "V" (ex: "220 V", "127 V")
     - Se não encontrar, use ""
+
+==========================
+VALIDAÇÃO CRÍTICA - VENCIMENTO vs PRÓXIMA LEITURA
+==========================
+
+REGRA ABSOLUTA: vencimento e proximo_leitura são campos COMPLETAMENTE DIFERENTES e NUNCA devem ter o mesmo valor.
+
+LOCALIZAÇÃO:
+- vencimento: PARTE SUPERIOR da fatura, próximo ao "Total a pagar", em caixa amarela
+- proximo_leitura: PARTE INFERIOR/MÉDIA da fatura, na tabela "Datas das Leituras"
+
+VALIDAÇÃO OBRIGATÓRIA ANTES DE RETORNAR:
+- Se você extrair o mesmo valor para ambos os campos → ERRO GRAVE
+- Procure novamente na fatura pelos dois campos em seus locais corretos
+- Se não encontrar "Próxima Leitura" na tabela de leituras → use "" (string vazia) para proximo_leitura
+- NUNCA copie o valor de "vencimento" para "proximo_leitura"
 
 ==========================
 FLAGS BOOLEANAS
