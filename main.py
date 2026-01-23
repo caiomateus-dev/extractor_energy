@@ -709,6 +709,15 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 timeout=settings.request_timeout_s,
             )
             
+            # Log TUDO que vem do subprocess ANTES de processar
+            log(f"[infer] ========== SAÍDA COMPLETA DO SUBPROCESS ==========")
+            log(f"[infer] returncode: {result.returncode}")
+            log(f"[infer] STDOUT COMPLETO ({len(result.stdout)} chars):")
+            log(result.stdout)
+            log(f"[infer] STDERR COMPLETO ({len(result.stderr)} chars):")
+            log(result.stderr)
+            log(f"[infer] ========== FIM SAÍDA SUBPROCESS ==========")
+            
             if result.returncode != 0:
                 error_msg = result.stderr or result.stdout or "Erro desconhecido no subprocesso"
                 log(f"[infer] erro no subprocesso (code {result.returncode}): {error_msg[:500]}")
@@ -1042,9 +1051,10 @@ async def extract_energy(
                 log(f"[consumo] ========== SAÍDA BRUTA DO MODELO (ANTES DO _extract_json) ==========")
                 log(f"[consumo] TIPO: {type(result_consumption)}")
                 log(f"[consumo] TAMANHO: {len(result_consumption)} caracteres")
-                log(f"[consumo] CONTEÚDO BRUTO (EXATAMENTE COMO VEM DO MODELO):")
-                # Loga o texto bruto diretamente, sem formatação
+                log(f"[consumo] CONTEÚDO BRUTO COMPLETO (EXATAMENTE COMO VEM DO MODELO):")
+                # Loga o texto bruto diretamente, sem formatação, caractere por caractere se necessário
                 log(result_consumption)
+                log(f"[consumo] REPR (para ver caracteres especiais): {repr(result_consumption)}")
                 log(f"[consumo] ========== FIM SAÍDA BRUTA ==========")
             
             # Extrai JSON imediatamente
