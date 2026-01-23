@@ -33,11 +33,19 @@ class OCRDetector:
             )
         
         try:
-            # Initialize OCR with detection and recognition
-            # use_angle_cls=False for faster processing (we assume upright text)
+            # Initialize OCR with same config as ocr.py
+            import os
+            os.environ.setdefault("DISABLE_MODEL_SOURCE_CHECK", "True")
+            os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+            
             self.ocr = PaddleOCR(
-                use_angle_cls=False,
-                lang=lang
+                ocr_version="PP-OCRv5",
+                lang=lang,
+                use_doc_unwarping=False,
+                use_doc_orientation_classify=False,
+                use_textline_orientation=True,
+                text_det_limit_type="max",
+                text_det_limit_side_len=1536,
             )
         except (ImportError, OSError, Exception) as e:
             error_detail = str(e)
@@ -65,49 +73,59 @@ class OCRDetector:
             List of dicts with keys: 'bbox', 'text', 'score'
             bbox format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
         """
-        import tempfile
-        import os
-        
-        # Ensure RGB format
+        # Convert PIL Image to BGR numpy array (same as ocr.py)
         img_rgb = img.convert('RGB')
+        rgb_array = np.array(img_rgb)
+        # Convert RGB to BGR (PaddleOCR expects BGR)
+        bgr_array = rgb_array[:, :, ::-1].copy()
         
-        # Save to temporary file - PaddleOCR works best with file paths
-        temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        try:
-            img_rgb.save(temp_img.name, format='JPEG', quality=95)
-            temp_img_path = temp_img.name
-        except Exception as e:
-            temp_img.close()
-            raise RuntimeError(f"Falha ao salvar imagem temporária: {e}") from e
+        # Use predict() method with BGR array (same as ocr.py)
+        pred_kwargs = {
+            "use_doc_unwarping": False,
+            "use_doc_orientation_classify": False,
+            "use_textline_orientation": True,
+        }
+        pred = self.ocr.predict(bgr_array, **pred_kwargs)
         
-        try:
-            # Use file path - most reliable method according to docs
-            # Don't pass cls parameter - newer versions don't support it
-            result = self.ocr.ocr(temp_img_path)
-            
-            if not result or not result[0]:
-                return []
-            
-            boxes = []
-            for line in result[0]:
-                if len(line) >= 2:
-                    bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                    text_info = line[1]
-                    text = text_info[0] if isinstance(text_info, (list, tuple)) else str(text_info)
-                    score = text_info[1] if isinstance(text_info, (list, tuple)) and len(text_info) > 1 else 1.0
-                    
+        boxes = []
+        
+        # Handle new format: list[dict] with rec_texts + rec_polys
+        if isinstance(pred, list) and pred and isinstance(pred[0], dict):
+            for page in pred:
+                texts = page.get("rec_texts") or []
+                polys = page.get("rec_polys") or []
+                for text, poly in zip(texts, polys):
+                    if not text:
+                        continue
+                    # Convert poly to bbox format
+                    arr = np.asarray(poly)
+                    if arr.shape != (4, 2):
+                        arr = arr.reshape(4, 2)
+                    bbox = [[int(x), int(y)] for x, y in arr.tolist()]
                     boxes.append({
                         'bbox': bbox,
-                        'text': text,
-                        'score': score
+                        'text': str(text),
+                        'score': 1.0  # New format doesn't provide score per item
                     })
-            
             return boxes
-        finally:
-            try:
-                os.unlink(temp_img_path)
-            except Exception:
-                pass
+        
+        # Handle legacy format: list[list[[poly, (text, score)]]]
+        if isinstance(pred, list):
+            for line in pred:
+                if not isinstance(line, (list, tuple)) or len(line) < 2:
+                    continue
+                poly, rec = line[0], line[1]
+                text = rec[0] if isinstance(rec, (list, tuple)) and rec else ""
+                score = rec[1] if isinstance(rec, (list, tuple)) and len(rec) > 1 else 1.0
+                if not text:
+                    continue
+                boxes.append({
+                    'bbox': poly,
+                    'text': str(text),
+                    'score': float(score) if score else 1.0
+                })
+        
+        return boxes
     
     def get_bbox_bounds(self, bbox: List[List[float]]) -> Tuple[int, int, int, int]:
         """Convert bbox to (x_min, y_min, x_max, y_max) format
