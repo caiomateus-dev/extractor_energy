@@ -6,9 +6,67 @@
     "cemig": {
       "mg": "cemig_mg.md"
     },
+    "ceee": {
+      "rs": "ceee_rs.md"
+    },
+    "celesc": {
+      "sc": "celesc_sc.md"
+    },
+    "coelba": {
+      "ba": "coelba_ba.md"
+    },
+    "copel": {
+      "pr": "copel_pr.md"
+    },
+    "enel": {
+      "rj": "enel_rj.md",
+      "ce": "enel_ce.md"
+    },
+    "cosern": {
+      "rn": "cosern_rn.md"
+    },
+    "edp": {
+      "sp": "edp_sp.md",
+      "es": "edp_es.md"
+    },
+    "energisa": {
+      "ms": "energisa_ms.md",
+      "mt": "energisa_mt.md",
+      "se": "energisa_se.md",
+      "pb": "energisa_pb.md",
+      "minas_rio_mg": "energisa_minas_rio_mg.md",
+      "minas_rio_rj": "energisa_minas_rio_rj.md",
+      "sul_sudeste_mg": "energisa_sul_sudeste_mg.md",
+      "sul_sudeste_pr": "energisa_sul_sudeste_pr.md",
+      "sul_sudeste_sp": "energisa_sul_sudeste_sp.md",
+      "tocantins_to": "energisa_tocantins_to.md"
+    },
     "equatorial": {
       "go": "equatorial_go.md",
-      "pi": "equatorial_pi.md"
+      "pi": "equatorial_pi.md",
+      "al": "equatorial_al.md",
+      "ma": "equatorial_ma.md",
+      "pa": "equatorial_pa.md"
+    },
+    "cpfl": {
+      "sp": "cpfl_sp.md",
+      "piratininga_sp": "cpfl_piratininga_sp.md",
+      "santa_cruz_sp": "cpfl_santa_cruz_sp.md",
+      "santa_cruz_mg": "cpfl_santa_cruz_mg.md",
+      "santa_cruz_pr": "cpfl_santa_cruz_pr.md"
+    },
+    "elektro": {
+      "sp": "elektro_sp.md",
+      "ms": "elektro_ms.md"
+    },
+    "light": {
+      "rj": "light_rj.md"
+    },
+    "neo_energia": {
+      "pe": "neo_energia_pe.md"
+    },
+    "rge": {
+      "rs": "rge_rs.md"
     }
   }
 }
