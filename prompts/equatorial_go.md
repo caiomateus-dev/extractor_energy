@@ -10,8 +10,10 @@ LOCALIZAÇÃO DOS CAMPOS
    - NUNCA use código de barras do rodapé
 
 2. cod_cliente: Procure em uma CAIXA LARANJA/AMARELA DESTACADA logo abaixo do "Unidade Consumidora", rotulada como "Parceiro de Negócio".
-   - Formato: números simples sem máscara (ex: "102899830")
+   - Formato: números simples sem máscara (ex: "1951676", "102899830")
    - Aparece sempre em uma caixa laranja/amarela destacada no topo direito, abaixo do código da instalação
+   - CRÍTICO: O valor "Parceiro de Negócio" É o cod_cliente. SEMPRE extraia esse valor para cod_cliente.
+   - Se encontrar "Parceiro de Negócio" com um número, esse número é o cod_cliente.
    - Se não encontrar explicitamente, use null
    - ATENÇÃO: O campo "Parceiro de Negócio" NÃO é conta_contrato. NÃO use esse valor para conta_contrato.
 
@@ -72,7 +74,12 @@ VALORES EM ABERTO
 
 REGRA CRÍTICA: valores_em_aberto contém APENAS débitos de meses ANTERIORES ao mes_referencia.
 
-ATENÇÃO: NÃO invente valores. Se você não encontrar uma seção clara de "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" com débitos listados, retorne valores_em_aberto = [] e faturas_venc = false.
+ATENÇÃO CRÍTICA: 
+- PROCURE ATENTAMENTE pela seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" na fatura
+- Esta seção geralmente aparece no RODAPÉ da fatura, destacada em vermelho ou com fundo colorido
+- Se você encontrar essa seção com débitos listados, EXTRAIA os valores
+- Se você não encontrar essa seção ou ela estiver vazia, retorne valores_em_aberto = [] e faturas_venc = false
+- NÃO invente valores. Mas TAMBÉM não ignore a seção se ela existir.
 
 ONDE PROCURAR:
 - Procure APENAS na seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
@@ -89,7 +96,11 @@ ONDE PROCURAR:
 VALIDAÇÃO OBRIGATÓRIA - SIGA ESTES PASSOS EM ORDEM:
 
 PASSO 1: LOCALIZE a seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
+- PROCURE NO RODAPÉ DA FATURA - esta seção geralmente aparece no final da fatura
+- PROCURE POR TEXTOS EM VERMELHO ou com fundo colorido destacado
+- PROCURE POR TEXTOS como "REAVISO DE VENCIMENTO", "REAVISO", "NOTIFICAÇÃO", "NOTIFICACAO", "DÉBITOS ANTERIORES"
 - Se NÃO encontrar essa seção → valores_em_aberto = [], faturas_venc = false → PARE AQUI
+- Se ENCONTRAR a seção, CONTINUE para o PASSO 2
 
 PASSO 2: VERIFIQUE se a seção está VAZIA:
 - Se a seção existir mas não tiver NENHUMA informação de fatura vencida listada
@@ -108,23 +119,38 @@ PASSO 3: Se a seção tiver FATURAS VENCIDAS LISTADAS:
    → Se houver ao menos um débito anterior válido → faturas_venc = true
    → Se todos forem da fatura atual ou nenhum válido → valores_em_aberto = [], faturas_venc = false
    
-EXEMPLO PRÁTICO:
-- Se mes_referencia = "06/2025" e encontrar "MES 5/2025 VALOR TOTAL: R$ 506,94" na seção REAVISO DE VENCIMENTO:
+EXEMPLO PRÁTICO OBRIGATÓRIO:
+- Se mes_referencia = "06/2025" e encontrar na seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" uma linha como:
+  - "NOTIFICACAO: 1 FATURA VENCIDA: MES 5/2025 VALOR TOTAL: R$ 506,94"
+  - "MES 5/2025 VALOR TOTAL: R$ 506,94"
+  - "FATURA VENCIDA: MES 5/2025 VALOR TOTAL: R$ 506,94"
+- Então você DEVE extrair:
   → valores_em_aberto = [{"mes_ano": "05/2025", "valor": 506.94}]
   → faturas_venc = true
 
+REGRA ABSOLUTA:
+- Se você encontrar a seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" com débitos listados, você DEVE extrair os valores
+- Não ignore essa seção se ela existir na fatura
+- Compare o mês do débito com mes_referencia: se for anterior, inclua em valores_em_aberto
+
 VALIDAÇÃO FINAL OBRIGATÓRIA - ANTES DE RETORNAR O JSON, VERIFIQUE:
 
-1. Se você não encontrou uma seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" com débitos listados → valores_em_aberto = [] e faturas_venc = false
+1. Você PROCUROU pela seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" no RODAPÉ da fatura? (SIM/NÃO)
+   - Se NÃO procurou → PROCURE AGORA antes de retornar
+   - Se procurou e NÃO encontrou → valores_em_aberto = [] e faturas_venc = false
 
-2. Se a seção existir mas estiver VAZIA → valores_em_aberto = [] e faturas_venc = false
+2. Se você ENCONTROU a seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO":
+   - Ela tem débitos listados? (SIM/NÃO)
+   - Se SIM → Extraia os débitos que são anteriores ao mes_referencia
+   - Se NÃO (seção vazia) → valores_em_aberto = [] e faturas_venc = false
 
 3. Se valores_em_aberto contiver o mes_referencia atual → valores_em_aberto = [] e faturas_venc = false (isso está ERRADO)
 
 REGRA ABSOLUTA:
-- Na dúvida, retorne valores_em_aberto = [] e faturas_venc = false
-- É melhor retornar vazio do que retornar valores errados
-- NUNCA invente valores
+- PROCURE ATENTAMENTE pela seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" no RODAPÉ da fatura
+- Se encontrar débitos anteriores ao mes_referencia, EXTRAIA os valores
+- Se não encontrar a seção ou ela estiver vazia, retorne valores_em_aberto = [] e faturas_venc = false
+- NUNCA invente valores, mas TAMBÉM não ignore a seção se ela existir
 
 ==========================
 CONSUMO HISTÓRICO
@@ -140,20 +166,28 @@ consumo_lista: Procure na seção de histórico de consumo (geralmente não apar
 ENDEREÇO - REGRAS ESPECÍFICAS EQUATORIAL
 ==========================
 
-REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL:
+⚠️⚠️⚠️ ATENÇÃO: Esta seção é usada APENAS para extração de endereço via crop separado ⚠️⚠️⚠️
 
-- rua: Nome completo da rua/avenida. Se aparecer "RUA" ou "AVENIDA" seguido de números, esses números fazem parte do nome da rua. NÃO extraia esses números como campo `numero`.
-- numero: Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero` (NUNCA em `complemento`). Se houver um número de endereço explícito, extraia-o.
-- complemento: Use para informações como Quadra (Q.), Lote (L.), Bloco, Apto, etc. Se aparecer "S/N" junto com complemento, extraia apenas o complemento (sem o S/N).
-- bairro: Nome completo do bairro incluindo prefixos como "VILA", "JARDIM", "CONJUNTO", etc.
-- cep: Procure por "CEP:" seguido de números na linha do endereço. Extraia apenas os números (sem formatação). NÃO use valores de outras partes da fatura (como CEPs de outras seções).
-- cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. NÃO confunda com outras cidades que possam aparecer em outras partes da fatura (como cidade da distribuidora).
-- estado: Sigla de 2 letras que aparece após o nome da cidade na linha do endereço.
+REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL - SIGA EXATAMENTE:
 
-REGRA CRÍTICA PARA ENDEREÇO:
-- Extraia APENAS os dados que aparecem na linha do endereço do cliente
-- NÃO use valores de outras seções da fatura (como cidade da distribuidora, CEPs de outras partes, etc.)
-- Se não encontrar algum campo na linha do endereço, use "" (string vazia)
+EXEMPLO DE ENDEREÇO EQUATORIAL: "RUA 01, Q. 11, L. 22, S/N VILA SAO JOSE CEP: 75402700 INHUMAS GO"
+
+EXTRAÇÃO OBRIGATÓRIA (SIGA EXATAMENTE):
+- rua: "RUA 01" (o número "01" após "RUA" faz parte do nome da rua. NÃO é o número do endereço. NUNCA extraia esse número como campo `numero`. Se aparecer "RUA 01", o campo `rua` deve ser "RUA 01" completo)
+- numero: "S/N" (SEMPRE que aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero`. NUNCA coloque em `complemento`. Se aparecer "S/N" no endereço, o campo `numero` DEVE ser "S/N")
+- complemento: "Q. 11, L. 22" (Quadra e Lote são complementos. Se aparecer "Q. 11, L. 22, S/N", extraia apenas "Q. 11, L. 22" sem o S/N. O S/N vai para o campo `numero`)
+- bairro: "VILA SAO JOSE" (nome completo incluindo prefixo "VILA". Se aparecer "VILA SAO JOSE", extraia completo)
+- cep: "75402700" (extraia APENAS os números após "CEP:" na linha do endereço. Se aparecer "CEP: 75402700", extraia "75402700". NÃO use CEPs de outras partes da fatura como "54.000-000")
+- cidade: "INHUMAS" (nome da cidade que aparece ANTES da sigla do estado na linha do endereço. Se aparecer "INHUMAS GO", a cidade é "INHUMAS". NÃO use "GOIÂNIA" ou outras cidades de outras partes da fatura)
+- estado: "GO" (sigla de 2 letras após o nome da cidade na linha do endereço)
+
+REGRAS ABSOLUTAS (SIGA EXATAMENTE):
+1. Se aparecer "RUA XX" ou "AVENIDA XX" (onde XX é um número), o número XX faz parte do nome da rua. NÃO extraia esse número como campo `numero`. O campo `rua` deve conter "RUA XX" completo.
+2. Se aparecer "S/N" ou "Sem Número" no endereço, SEMPRE coloque "S/N" no campo `numero` (NUNCA em `complemento`). Se aparecer "S/N", o campo `numero` DEVE ser "S/N".
+3. Complemento: Use para Quadra (Q.), Lote (L.), Bloco, Apto, etc. Se aparecer "Q. 11, L. 22, S/N", extraia apenas "Q. 11, L. 22" no campo `complemento` (sem o S/N). O S/N vai para `numero`.
+4. CEP: Procure por "CEP:" seguido de números na linha do endereço. Extraia apenas os números (sem formatação). Se aparecer "CEP: 75402700", extraia "75402700". NÃO use valores de outras partes da fatura.
+5. Cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. Se aparecer "INHUMAS GO", a cidade é "INHUMAS". NÃO confunda com outras cidades que possam aparecer em outras partes da fatura.
+6. Extraia APENAS os dados que aparecem na linha do endereço do cliente. NÃO use valores de outras seções da fatura (como cidade da distribuidora, CEPs de outras partes, etc.).
 
 ==========================
 OBRIGATORIO

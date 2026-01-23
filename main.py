@@ -598,15 +598,8 @@ def _read_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str
     if not base_path.exists():
         raise RuntimeError(f"Arquivo {base_path.as_posix()} não encontrado.")
     
-    base_prompt = base_path.read_text(encoding="utf-8").strip()
-    
-    if spec_prompt:
-        return f"""{base_prompt}
-
-REGRAS ESPECÍFICAS DA CONCESSIONÁRIA:
-{spec_prompt}"""
-    
-    return base_prompt
+    # Retorna apenas o prompt base, sem mesclar com regras específicas
+    return base_path.read_text(encoding="utf-8").strip()
 
 
 def _read_consumption_prompt() -> str:
