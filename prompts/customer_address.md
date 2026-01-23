@@ -45,9 +45,10 @@ EXTRAÇÃO PASSO A PASSO
 
 3. complemento: 
    - Tudo que vem após a rua e antes do bairro
-   - "Q." (Quadra) e "L." (Lote) são complementos válidos e devem ser incluídos
-   - Inclua Quadra (Q.), Lote (L.), Apartamento, Bloco, etc. se aparecerem
-   - Inclua TODOS os elementos do complemento (Q., L., APART., RESIDENCIAL, etc.)
+   - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos no complemento
+   - CRÍTICO: Se aparecer "Q. 4, L. 11" → inclua "Q. 4, L. 11" no complemento
+   - CRÍTICO: Se aparecer "Q. 4, L. 11, APART. 106" → inclua TUDO: "Q. 4, L. 11, APART. 106"
+   - Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento
    - Se não houver complemento, use "" (string vazia)
 
@@ -87,8 +88,8 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
    - "S/N" NUNCA vai em complemento
 
 3. complemento: Elementos após rua e antes do bairro
-   - "Q." (Quadra) e "L." (Lote) são complementos válidos e devem ser incluídos
-   - Inclua todos os elementos (Q., L., APART., RESIDENCIAL, etc.)
+   - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos
+   - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - NÃO inclua "S/N"
 
 4. bairro: Nome completo como aparece na fatura
