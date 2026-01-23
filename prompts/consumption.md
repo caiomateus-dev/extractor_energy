@@ -12,6 +12,7 @@ Formato do JSON esperado:
 
 REGRAS CRÍTICAS:
 - consumo_lista: Lista de objetos com histórico de consumo mensal na ORDEM EXATA que aparece na tabela
+- CRÍTICO: MÁXIMO de 13 itens na lista. Se houver mais de 13 meses na tabela, extraia apenas os 13 mais recentes
 - mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
 - consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
 

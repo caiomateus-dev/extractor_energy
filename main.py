@@ -16,7 +16,7 @@ import re
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 from config import settings
 
@@ -441,7 +441,7 @@ def _normalize_cep(cep: str) -> str:
     return cep
 
 
-def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict[str, Any]:
+def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str, uf: str = "") -> Dict[str, Any]:
     template: Dict[str, Any] = {
         "cod_cliente": "",
         "conta_contrato": "",
@@ -537,60 +537,42 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str) -> Dict
         consumo_cleaned.append({"mes_ano": mes_ano, "consumo": consumo_int})
     out["consumo_lista"] = consumo_cleaned
 
+    # Aplica regras específicas por concessionária/UF
+    concessionaria_key = _key(concessionaria_input)
+    uf_key = _key(uf)
+    
+    # Equatorial GO: conta_contrato sempre null
+    if concessionaria_key == "equatorial" and uf_key == "go":
+        out["conta_contrato"] = None
+        log(f"[validation] aplicada regra: conta_contrato = null para {concessionaria_input}/{uf}")
+    
+    # Validação crítica: estado deve corresponder ao UF da requisição
+    estado_extraido = str(out.get("estado", "")).strip().upper()
+    uf_esperado = uf.strip().upper()
+    
+    if estado_extraido and uf_esperado:
+        if estado_extraido != uf_esperado:
+            log(f"[validation] AVISO: estado extraído '{estado_extraido}' não corresponde ao UF '{uf_esperado}'. Corrigindo para '{uf_esperado}'")
+            out["estado"] = uf_esperado
+        else:
+            out["estado"] = estado_extraido
+    elif uf_esperado:
+        # Se não extraiu estado mas temos UF na requisição, usa o UF
+        out["estado"] = uf_esperado
+        log(f"[validation] estado não extraído, usando UF da requisição: {uf_esperado}")
+
     return out
 
 
 def _read_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str:
-    """Carrega prompt específico para extração de nome do cliente e endereço"""
-    # Carrega regras específicas da concessionária se disponível
-    spec_prompt = ""
-    try:
-        mapper = _load_prompt_map()
-        prompts = mapper.get("prompts", {}) if isinstance(mapper.get("prompts", {}), dict) else {}
-        aliases = mapper.get("aliases", {}) if isinstance(mapper.get("aliases", {}), dict) else {}
-        
-        concessionaria_key = _key(concessionaria)
-        aliased = aliases.get(concessionaria_key)
-        if isinstance(aliased, str) and aliased.strip():
-            concessionaria_key = _key(aliased)
-        uf_key = _key(uf)
-        
-        spec_filename: str | None = None
-        by_uf = prompts.get(concessionaria_key)
-        if isinstance(by_uf, dict):
-            v = by_uf.get(uf_key) or by_uf.get("*")
-            if isinstance(v, str) and v.strip():
-                spec_filename = v.strip()
-        elif isinstance(by_uf, str) and by_uf.strip():
-            spec_filename = by_uf.strip()
-        
-        if spec_filename:
-            spec_path = PROMPTS_DIR / spec_filename
-            if spec_path.exists():
-                spec_content = spec_path.read_text(encoding="utf-8").strip()
-                # Extrai apenas a seção de ENDEREÇO DO CLIENTE
-                if "ENDEREÇO DO CLIENTE" in spec_content:
-                    start_idx = spec_content.find("ENDEREÇO DO CLIENTE")
-                    end_idx = spec_content.find("==========================", start_idx + 1)
-                    if end_idx == -1:
-                        end_idx = len(spec_content)
-                    spec_prompt = spec_content[start_idx:end_idx].strip()
-    except Exception:
-        pass
-    
+    """Carrega prompt para extração de endereço do cliente"""
+    # Retorna APENAS o prompt base de customer_address.md
+    # NÃO mescla com prompts específicos da concessionária
     base_path = PROMPTS_DIR / "customer_address.md"
     if not base_path.exists():
         raise RuntimeError(f"Arquivo {base_path.as_posix()} não encontrado.")
     
-    base_prompt = base_path.read_text(encoding="utf-8").strip()
-    
-    if spec_prompt:
-        return f"""{base_prompt}
-
-REGRAS ESPECÍFICAS DA CONCESSIONÁRIA:
-{spec_prompt}"""
-    
-    return base_prompt
+    return base_path.read_text(encoding="utf-8").strip()
 
 
 def _read_consumption_prompt() -> str:
@@ -599,6 +581,22 @@ def _read_consumption_prompt() -> str:
     if not path.exists():
         raise RuntimeError(f"Arquivo {path.as_posix()} não encontrado.")
     return path.read_text(encoding="utf-8").strip()
+
+
+def _enhance_address_image(img: Image.Image) -> Image.Image:
+    """
+    Aplica pré-processamento de contraste na imagem de endereço para melhorar a legibilidade.
+    Aumenta o contraste para deixar a fonte mais forte e facilitar a extração.
+    """
+    try:
+        # Aplica enhancement de contraste (fator 1.3 = 30% mais contraste)
+        enhancer = ImageEnhance.Contrast(img)
+        enhanced_img = enhancer.enhance(1.3)
+        log("[img] contraste aplicado na imagem de endereço (fator 1.3)")
+        return enhanced_img
+    except Exception as e:
+        log(f"[img] erro ao aplicar contraste: {e}, usando imagem original")
+        return img
 
 
 async def _infer_one(img: Image.Image, prompt_text: str) -> str:
@@ -619,14 +617,32 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
 
     # Salva imagem temporariamente para subprocess
     temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    temp_prompt_file = None
     try:
         # Converte para RGB se necessário
         if img.mode != 'RGB':
             img = img.convert('RGB')
         img.save(temp_img.name, format='JPEG', quality=95)
         temp_img_path = temp_img.name
-    finally:
-        temp_img.close()
+        
+        # Para prompts longos, salva em arquivo temporário para evitar problemas com shell
+        # O CLI pode ter limitações de tamanho de argumento
+        if len(prompt_text) > 8000:  # Limite conservador para argumentos de shell
+            temp_prompt_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8')
+            temp_prompt_file.write(prompt_text)
+            temp_prompt_file.close()
+            temp_prompt_path = temp_prompt_file.name
+            use_prompt_file = True
+        else:
+            temp_prompt_path = None
+            use_prompt_file = False
+    except Exception as e:
+        if temp_img:
+            try:
+                os.unlink(temp_img.name)
+            except:
+                pass
+        raise
 
     loop = asyncio.get_running_loop()
 
@@ -635,14 +651,27 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             # Usa subprocess para chamar mlx_vlm.generate como processo separado
             # Isso permite paralelismo real - cada chamada é um processo independente
             # Usa python -m mlx_vlm.generate conforme documentação
+            # O CLI formata o prompt automaticamente, então passamos o prompt bruto
             cmd = [
                 sys.executable, "-m", "mlx_vlm.generate",
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
-                "--prompt", prompt_text,
-                "--image", temp_img_path,
+                "--verbose",
             ]
+            
+            # Adiciona prompt: direto ou via arquivo
+            if use_prompt_file:
+                # Lê o prompt do arquivo e passa como argumento (alguns CLIs suportam @file)
+                # Mas mlx_vlm.generate não suporta @file, então vamos passar direto mesmo
+                # Se o arquivo for muito grande, pode ser necessário outra abordagem
+                with open(temp_prompt_path, 'r', encoding='utf-8') as f:
+                    prompt_content = f.read()
+                cmd.extend(["--prompt", prompt_content])
+            else:
+                cmd.extend(["--prompt", prompt_text])
+            
+            cmd.extend(["--image", temp_img_path])
             
             result = subprocess.run(
                 cmd,
@@ -657,23 +686,169 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
             
             output = result.stdout.strip()
-            # Remove mensagens de deprecação ou avisos que possam aparecer no início
-            lines = output.split('\n')
-            filtered_lines = []
-            for line in lines:
-                if 'deprecated' in line.lower() or 'calling' in line.lower() and 'python -m' in line.lower():
-                    continue
-                if line.strip():
-                    filtered_lines.append(line)
             
-            return '\n'.join(filtered_lines)
+            def _find_balanced_json(text: str, start_char: str = '{') -> str | None:
+                """Encontra JSON completo com chaves/colchetes balanceados"""
+                if start_char == '{':
+                    end_char = '}'
+                    open_char, close_char = '{', '}'
+                else:
+                    end_char = ']'
+                    open_char, close_char = '[', ']'
+                
+                start_pos = text.find(start_char)
+                if start_pos == -1:
+                    return None
+                
+                depth = 0
+                in_string = False
+                escape_next = False
+                
+                for i in range(start_pos, len(text)):
+                    char = text[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    
+                    if in_string:
+                        continue
+                    
+                    if char == open_char:
+                        depth += 1
+                    elif char == close_char:
+                        depth -= 1
+                        if depth == 0:
+                            return text[start_pos:i+1]
+                
+                return None
+            
+            # A resposta real do modelo vem após <|im_start|>assistant
+            # Procura por esse marcador e pega tudo depois
+            assistant_marker = '<|im_start|>assistant'
+            assistant_pos = output.find(assistant_marker)
+            filtered_output = output  # Inicialização padrão
+            
+            if assistant_pos >= 0:
+                # Pega tudo após o marcador assistant
+                response_section = output[assistant_pos + len(assistant_marker):].strip()
+                
+                # Remove tokens de formatação restantes
+                response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
+                
+                # Remove delimitadores markdown primeiro (se houver)
+                # Isso ajuda a encontrar o JSON real
+                cleaned_section = re.sub(r'```json\s*', '', response_section)
+                cleaned_section = re.sub(r'\s*```', '', cleaned_section)
+                cleaned_section = cleaned_section.strip()
+                
+                # Tenta encontrar JSON completo com chaves balanceadas
+                json_start = cleaned_section.find('{')
+                if json_start != -1:
+                    balanced_json = _find_balanced_json(cleaned_section[json_start:], '{')
+                    if balanced_json:
+                        # Valida se o JSON é válido tentando fazer parse
+                        try:
+                            json.loads(balanced_json)
+                            filtered_output = balanced_json
+                        except json.JSONDecodeError:
+                            # Fallback: tenta encontrar JSON válido de outra forma
+                            # Procura pelo último } que fecha o objeto principal
+                            last_brace = cleaned_section.rfind('}')
+                            if last_brace > json_start:
+                                potential_json = cleaned_section[json_start:last_brace+1]
+                                try:
+                                    json.loads(potential_json)
+                                    filtered_output = potential_json
+                                except json.JSONDecodeError:
+                                    filtered_output = balanced_json  # Usa o que encontrou mesmo assim
+                            else:
+                                filtered_output = balanced_json
+                    else:
+                        # Fallback: procura pelo último } que fecha o objeto
+                        last_brace = cleaned_section.rfind('}')
+                        if last_brace > json_start:
+                            potential_json = cleaned_section[json_start:last_brace+1]
+                            try:
+                                json.loads(potential_json)
+                                filtered_output = potential_json
+                            except json.JSONDecodeError:
+                                # Último recurso: tenta lista JSON
+                                list_start = cleaned_section.find('[')
+                                if list_start != -1:
+                                    balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
+                                    if balanced_list:
+                                        filtered_output = balanced_list
+                                    else:
+                                        filtered_output = cleaned_section
+                                else:
+                                    filtered_output = cleaned_section
+                        else:
+                            filtered_output = cleaned_section
+                else:
+                    # Tenta lista JSON se não encontrou objeto
+                    list_start = cleaned_section.find('[')
+                    if list_start != -1:
+                        balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
+                        if balanced_list:
+                            filtered_output = balanced_list
+                        else:
+                            filtered_output = cleaned_section
+                    else:
+                        filtered_output = cleaned_section
+                
+                filtered_output = filtered_output.strip()
+                
+                # Substitui vírgula por ponto em números (formato brasileiro)
+                filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
+            else:
+                # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
+                # Encontra todas as posições de '{' e tenta extrair JSON completo de cada uma
+                json_candidates = []
+                pos = 0
+                while True:
+                    pos = output.find('{', pos)
+                    if pos == -1:
+                        break
+                    balanced_json = _find_balanced_json(output[pos:], '{')
+                    if balanced_json:
+                        json_candidates.append((pos, balanced_json))
+                    pos += 1
+                
+                if json_candidates:
+                    # Pega o último JSON encontrado (deve ser a resposta do modelo)
+                    _, filtered_output = json_candidates[-1]
+                    # Remove delimitadores markdown se houver
+                    filtered_output = re.sub(r'^```json\s*', '', filtered_output, flags=re.MULTILINE)
+                    filtered_output = re.sub(r'\s*```$', '', filtered_output, flags=re.MULTILINE)
+                    filtered_output = filtered_output.strip()
+                    # Substitui vírgula por ponto em números
+                    filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
+                else:
+                    # Último recurso: retorna o output completo
+                    filtered_output = output
+            
+            return filtered_output
         finally:
-            # Remove arquivo temporário
+            # Remove arquivos temporários
             try:
                 if os.path.exists(temp_img_path):
                     os.unlink(temp_img_path)
             except Exception:
                 pass
+            if temp_prompt_file and os.path.exists(temp_prompt_path):
+                try:
+                    os.unlink(temp_prompt_path)
+                except Exception:
+                    pass
             # Limpa cache e força garbage collection
             _clear_metal_cache()
             gc.collect()
@@ -780,65 +955,103 @@ async def extract_energy(
 
     t0 = time.time()
     log(f"[timing] tempo até início inferências: {(t0 - t_start)*1000:.1f}ms")
-    
-    # Prompt para imagem completa (dados gerais)
-    prompt_full = _read_prompt(concessionaria, uf)
-    prompt_full = f"""{prompt_full}
-
-Contexto da requisição: UF={uf}, Concessionária={concessionaria}
-
-Agora analise a imagem e retorne o JSON com os dados extraídos:"""
-    
-    log(f"[prompt] tamanho do prompt completo: {len(prompt_full)} caracteres")
 
     # Resultados das 3 inferências
     result_full = None
     result_customer = None
     result_consumption = None
     
+    # Extrai endereço e consumo PRIMEIRO para usar no prompt da imagem completa
+    payload_customer = {}
+    payload_consumption = {}
+    
+    # Inferência 1: Recorte cliente/endereço (PRIMEIRO)
+    if customer_crop_img is not None:
+        try:
+            t_infer1_start = time.time()
+            log("[infer] iniciando inferência recorte cliente/endereço")
+            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+            result_customer = await _infer_one(customer_crop_img, prompt_customer)
+            t_infer1_end = time.time()
+            log(f"[timing] inferência cliente: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+            
+            # Extrai JSON imediatamente
+            if result_customer:
+                try:
+                    payload_customer = _extract_json(result_customer)
+                except Exception as e:
+                    log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
+        except Exception as e:
+            log(f"[infer] erro na inferência cliente/endereço: {e}")
+            result_customer = None
+    
+    # Inferência 2: Recorte consumo (SEGUNDO)
+    if consumption_crop_img is not None:
+        try:
+            t_infer2_start = time.time()
+            log("[infer] iniciando inferência recorte consumo")
+            prompt_consumption = _read_consumption_prompt()
+            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+            t_infer2_end = time.time()
+            log(f"[timing] inferência consumo: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
+            
+            # Extrai JSON imediatamente
+            if result_consumption:
+                try:
+                    payload_consumption = _extract_json(result_consumption)
+                except Exception as e:
+                    log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+        except Exception as e:
+            log(f"[infer] erro na inferência consumo: {e}")
+            result_consumption = None
+    
+    # Inferência 3: Imagem completa (TERCEIRO) - agora com contexto do endereço extraído
+    # Monta prompt com informação do endereço extraído para evitar confusão no nome_cliente
+    prompt_full = _read_prompt(concessionaria, uf)
+    
+    # Adiciona informação do endereço extraído se disponível
+    endereco_contexto = ""
+    if payload_customer:
+        cidade_extraida = payload_customer.get("cidade", "").strip()
+        estado_extraido = payload_customer.get("estado", "").strip()
+        bairro_extraido = payload_customer.get("bairro", "").strip()
+        rua_extraida = payload_customer.get("rua", "").strip()
+        
+        if cidade_extraida or estado_extraido or bairro_extraido or rua_extraida:
+            endereco_contexto = "\n\nIMPORTANTE - CONTEXTO DO ENDEREÇO JÁ EXTRAÍDO:\n"
+            endereco_contexto += "O endereço do cliente já foi extraído e é:\n"
+            if rua_extraida:
+                endereco_contexto += f"- Rua: {rua_extraida}\n"
+            if bairro_extraido:
+                endereco_contexto += f"- Bairro: {bairro_extraido}\n"
+            if cidade_extraida:
+                endereco_contexto += f"- Cidade: {cidade_extraida}\n"
+            if estado_extraido:
+                endereco_contexto += f"- Estado: {estado_extraido}\n"
+            endereco_contexto += "\nCRÍTICO: O campo 'nome_cliente' NÃO deve conter nenhuma dessas informações de endereço.\n"
+            endereco_contexto += "Se você encontrar essas palavras (cidade, estado, bairro, rua) junto com o nome do cliente, extraia APENAS o nome, parando antes dessas informações.\n"
+            endereco_contexto += "O nome_cliente é APENAS o nome da pessoa/empresa, sem qualquer informação geográfica.\n"
+    
+    prompt_full = f"""{prompt_full}{endereco_contexto}
+
+Contexto da requisição: UF={uf}, Concessionária={concessionaria}
+
+Agora analise a imagem e retorne o JSON com os dados extraídos:"""
+    
+    log(f"[prompt] tamanho do prompt completo: {len(prompt_full)} caracteres")
+    
     # Sem _GATE - cada subprocess é independente e pode rodar em paralelo
-    # Inferência 1: Imagem completa (dados gerais)
     try:
-        t_infer1_start = time.time()
+        t_infer3_start = time.time()
         log("[infer] iniciando inferência imagem completa")
         result_full = await _infer_one(img, prompt_full)
-        t_infer1_end = time.time()
-        log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+        t_infer3_end = time.time()
+        log(f"[timing] inferência completa: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
     except Exception as e:
         log(f"[infer] erro na inferência imagem completa: {e}")
         result_full = None
-    
-    # Inferência 2: Recorte cliente/endereço
-    if customer_crop_img is not None:
-        try:
-            t_infer2_start = time.time()
-            log("[infer] iniciando inferência recorte cliente/endereço")
-            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-            result_customer = await _infer_one(customer_crop_img, prompt_customer)
-            t_infer2_end = time.time()
-            log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
-        except Exception as e:
-            log(f"[infer] erro na inferência cliente/endereço: {e}")
-            result_customer = None
-    else:
-        result_customer = None
-    
-    # Inferência 3: Recorte consumo
-    if consumption_crop_img is not None:
-        try:
-            t_infer3_start = time.time()
-            log("[infer] iniciando inferência recorte consumo")
-            prompt_consumption = _read_consumption_prompt()
-            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
-            t_infer3_end = time.time()
-            log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
-        except Exception as e:
-            log(f"[infer] erro na inferência consumo: {e}")
-            result_consumption = None
-    else:
-        result_consumption = None
     
     # Limpa imagens da memória (fora do _GATE para não bloquear outras requisições)
     if img is not None:
@@ -870,50 +1083,67 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     gc.collect()
 
     # Processa resultados e combina
+    # payload_customer e payload_consumption já foram extraídos acima
     payload_full = {}
-    payload_customer = {}
-    payload_consumption = {}
     
-    # Extrai JSON da inferência completa
+    # Extrai JSON da inferência completa (última a ser processada)
     if result_full:
         try:
             payload_full = _extract_json(result_full)
-            log(f"[infer] JSON imagem completa extraído: {json.dumps(payload_full, ensure_ascii=False)[:200]}")
         except Exception as e:
             log(f"[infer] ERRO ao extrair JSON imagem completa: {e}")
-            log(f"[infer] resposta completa: {result_full[:500]}")
-    
-    # Extrai JSON do recorte cliente/endereço
-    if result_customer:
-        try:
-            payload_customer = _extract_json(result_customer)
-            log(f"[infer] JSON cliente/endereço extraído: {json.dumps(payload_customer, ensure_ascii=False)[:200]}")
-        except Exception as e:
-            log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
-    
-    # Extrai JSON do recorte consumo
-    if result_consumption:
-        try:
-            payload_consumption = _extract_json(result_consumption)
-            log(f"[infer] JSON consumo extraído: {json.dumps(payload_consumption, ensure_ascii=False)[:200]}")
-        except Exception as e:
-            log(f"[infer] ERRO ao extrair JSON consumo: {e}")
     
     # Combina resultados: dados gerais da imagem completa
     payload = payload_full.copy()
     
-    # Sobrescreve com dados do endereço (sem nome_cliente) se disponível
+    # Sobrescreve com dados do endereço APENAS se o crop tem valor válido
     # O nome_cliente vem apenas da inferência principal, não do crop
     if payload_customer:
         for key in ["rua", "numero", "complemento", "bairro", "cidade", "estado", "cep"]:
-            if key in payload_customer and payload_customer[key]:
-                payload[key] = payload_customer[key]
+            customer_value = payload_customer.get(key)
+            # Só sobrescreve se o crop tem valor válido (não vazio)
+            # Validação adicional: rejeita valores suspeitos (muito curtos para CEP, estados inválidos, etc.)
+            if customer_value and str(customer_value).strip():
+                value_str = str(customer_value).strip()
+                # Validações específicas por campo
+                if key == "cep":
+                    # CEP deve ter 8 dígitos (pode ter formatação, mas deve ter 8 dígitos numéricos)
+                    digits_only = re.sub(r'[^\d]', '', value_str)
+                    if len(digits_only) != 8:
+                        log(f"[validation] CEP inválido ignorado: '{value_str}' (esperado 8 dígitos, encontrado {len(digits_only)})")
+                        continue  # Não sobrescreve com CEP inválido
+                elif key == "estado":
+                    # Estado deve ter exatamente 2 letras maiúsculas
+                    if not re.match(r'^[A-Z]{2}$', value_str):
+                        log(f"[validation] Estado inválido ignorado: '{value_str}' (esperado 2 letras maiúsculas)")
+                        continue  # Não sobrescreve com estado inválido
+                
+                payload[key] = customer_value
     
     # Adiciona consumo_lista se disponível
+    # IMPORTANTE: Não sobrescreve se payload_full já tem consumo_lista válido
+    # Só adiciona/sobrescreve se o crop tiver dados melhores ou se payload_full não tiver
     if payload_consumption and "consumo_lista" in payload_consumption:
-        payload["consumo_lista"] = payload_consumption["consumo_lista"]
+        consumo_crop = payload_consumption["consumo_lista"]
+        consumo_full = payload.get("consumo_lista", [])
+        
+        # Só sobrescreve se:
+        # 1. O crop tem lista não vazia E (payload_full não tem OU crop tem mais itens)
+        # OU
+        # 2. payload_full não tem consumo_lista ou está vazio
+        if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
+            if not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
+                # payload_full não tem dados, usa o crop
+                payload["consumo_lista"] = consumo_crop
+            elif len(consumo_crop) > len(consumo_full):
+                # crop tem mais dados, usa o crop
+                payload["consumo_lista"] = consumo_crop
+            # Se ambos têm dados e crop não tem mais, mantém o payload_full
+        elif not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
+            # Se payload_full não tem dados, usa o crop mesmo que vazio
+            payload["consumo_lista"] = consumo_crop
     
-    payload = _ensure_contract(payload, concessionaria_input=concessionaria)
+    payload = _ensure_contract(payload, concessionaria_input=concessionaria, uf=uf)
 
     ms = int((time.time() - t0) * 1000)
     log(f"[req] concessionaria={concessionaria.lower()} uf={uf.upper()} ms={ms}")
