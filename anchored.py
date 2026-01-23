@@ -436,17 +436,31 @@ async def extract_energy(
             
             payload_consumption = _extract_json(result_consumption)
             log_main(f"[ocr_anchors] payload_consumption keys: {list(payload_consumption.keys()) if payload_consumption else 'None'}")
+            log_main(f"[ocr_anchors] payload_consumption completo: {payload_consumption}")
             
-            if payload_consumption and 'consumo_lista' in payload_consumption:
-                consumo_crop = payload_consumption['consumo_lista']
-                log_main(f"[ocr_anchors] consumo_crop type: {type(consumo_crop)}, value: {consumo_crop}")
-                if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
-                    payload['consumo_lista'] = consumo_crop
-                    log_main(f"[ocr_anchors] consumo extraído do crop: {len(consumo_crop)} itens")
+            # O modelo pode retornar consumo_lista diretamente ou campos individuais
+            # Se retornar campos individuais, converte para lista
+            if payload_consumption:
+                if 'consumo_lista' in payload_consumption:
+                    consumo_crop = payload_consumption['consumo_lista']
+                    log_main(f"[ocr_anchors] consumo_crop type: {type(consumo_crop)}, value: {consumo_crop}")
+                    if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
+                        payload['consumo_lista'] = consumo_crop
+                        log_main(f"[ocr_anchors] consumo extraído do crop: {len(consumo_crop)} itens")
+                    else:
+                        log_main(f"[ocr_anchors] AVISO: consumo_lista vazio no crop")
+                elif 'mes_ano' in payload_consumption and 'consumo' in payload_consumption:
+                    # Modelo retornou formato individual (apenas 1 item) - converte para lista
+                    # Isso indica que o modelo não extraiu a lista completa, apenas 1 item
+                    consumo_item = {
+                        'mes_ano': str(payload_consumption.get('mes_ano', '')),
+                        'consumo': int(payload_consumption.get('consumo', 0))
+                    }
+                    payload['consumo_lista'] = [consumo_item]
+                    log_main(f"[ocr_anchors] AVISO: modelo retornou apenas 1 item, convertido: {consumo_item}")
+                    log_main(f"[ocr_anchors] O modelo deveria retornar lista completa. Verifique o prompt de consumo.")
                 else:
-                    log_main(f"[ocr_anchors] AVISO: consumo_lista vazio no crop (type: {type(consumo_crop)}, len: {len(consumo_crop) if isinstance(consumo_crop, list) else 'N/A'})")
-            else:
-                log_main(f"[ocr_anchors] AVISO: consumo_lista não encontrado no crop. payload_consumption: {payload_consumption}")
+                    log_main(f"[ocr_anchors] AVISO: formato desconhecido. payload_consumption: {payload_consumption}")
         except Exception as e:
             log_main(f"[ocr_anchors] erro ao extrair consumo: {e}")
             import traceback
