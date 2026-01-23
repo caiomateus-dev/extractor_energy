@@ -68,10 +68,12 @@ REGRA CRÍTICA: valores_em_aberto contém APENAS débitos de meses ANTERIORES ao
 ONDE PROCURAR:
 - Procure APENAS na seção "REAVISO DE VENCIMENTO" ou "NOTIFICAÇÃO" ou "DÉBITOS ANTERIORES"
 - Na seção "REAVISO DE VENCIMENTO", procure por linhas como:
-  - "NOTIFICAÇÃO: X FATURA(S)"
+  - "NOTIFICAÇÃO: X FATURA(S)" ou "NOTIFICACAO: X FATURA(S)"
   - "UNIDADE VENCIDA: MES X/AAAA VALOR TOTAL: R$ XXX,XX"
   - "MES X/AAAA VALOR TOTAL: R$ XXX,XX"
-- Esta seção geralmente aparece no meio ou rodapé da fatura
+  - "FATURA VENCIDA: MES X/AAAA VALOR TOTAL: R$ XXX,XX"
+- Esta seção geralmente aparece no meio ou rodapé da fatura, muitas vezes destacada em vermelho ou com fundo colorido
+- ATENÇÃO: A seção pode aparecer escrita como "REAVISO DE VENCIMENTO", "REAVISO", "NOTIFICAÇÃO", "NOTIFICACAO" (sem acento)
 - NUNCA use valores de outras seções da fatura (como aliquota_icms, valores faturados, tabelas de consumo, etc.)
 - NUNCA invente valores se a seção não existir ou estiver vazia
 
@@ -87,8 +89,8 @@ PASSO 2: VERIFIQUE se a seção está VAZIA:
 
 PASSO 3: Se a seção tiver FATURAS VENCIDAS LISTADAS:
    → Para cada fatura vencida EXPLICITAMENTE listada na seção:
-     - mes_ano: formato "MM/AAAA" (deve aparecer na linha, ex: "MES 5/2025" → "05/2025")
-     - valor: número float do valor do débito em R$ (deve aparecer na mesma linha, ex: "VALOR TOTAL: R$ 506,94" → 506.94)
+     - mes_ano: formato "MM/AAAA" (deve aparecer na linha, ex: "MES 5/2025" → "05/2025", "MES 05/2025" → "05/2025")
+     - valor: número float do valor do débito em R$ (deve aparecer na mesma linha, ex: "VALOR TOTAL: R$ 506,94" → 506.94, "R$ 506,94" → 506.94)
    → VALIDAÇÃO CRÍTICA: O valor deve ser um valor de FATURA (geralmente dezenas ou centenas de reais)
    → Compare mes_ano com mes_referencia:
      - Se forem IGUAIS → IGNORE completamente (é a fatura atual)
@@ -96,6 +98,11 @@ PASSO 3: Se a seção tiver FATURAS VENCIDAS LISTADAS:
      - Se for FUTURO → IGNORE
    → Se houver ao menos um débito anterior válido → faturas_venc = true
    → Se todos forem da fatura atual ou nenhum válido → valores_em_aberto = [], faturas_venc = false
+   
+EXEMPLO PRÁTICO:
+- Se mes_referencia = "06/2025" e encontrar "MES 5/2025 VALOR TOTAL: R$ 506,94" na seção REAVISO DE VENCIMENTO:
+  → valores_em_aberto = [{"mes_ano": "05/2025", "valor": 506.94}]
+  → faturas_venc = true
 
 VALIDAÇÃO FINAL OBRIGATÓRIA - ANTES DE RETORNAR O JSON, VERIFIQUE:
 

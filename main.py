@@ -568,9 +568,16 @@ def _read_customer_address_prompt(concessionaria: str = "", uf: str = "") -> str
             spec_path = PROMPTS_DIR / spec_filename
             if spec_path.exists():
                 spec_content = spec_path.read_text(encoding="utf-8").strip()
-                # Extrai apenas a seção de ENDEREÇO DO CLIENTE
+                # Extrai a seção de ENDEREÇO (pode ser "ENDEREÇO DO CLIENTE" ou "ENDEREÇO - REGRAS ESPECÍFICAS")
                 if "ENDEREÇO DO CLIENTE" in spec_content:
                     start_idx = spec_content.find("ENDEREÇO DO CLIENTE")
+                    end_idx = spec_content.find("==========================", start_idx + 1)
+                    if end_idx == -1:
+                        end_idx = len(spec_content)
+                    spec_prompt = spec_content[start_idx:end_idx].strip()
+                elif "ENDEREÇO - REGRAS ESPECÍFICAS" in spec_content:
+                    # Para Equatoriais e outras que usam formato diferente
+                    start_idx = spec_content.find("ENDEREÇO - REGRAS ESPECÍFICAS")
                     end_idx = spec_content.find("==========================", start_idx + 1)
                     if end_idx == -1:
                         end_idx = len(spec_content)
