@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -283,35 +283,45 @@ async def extract_fields_via_tiling_fallback(
     
     log_main(f"[ocr_anchors] usando fallback tiling para: {missing_fields}")
     tiling = get_tiling_fallback()
-    tiles = tiling.generate_adaptive_tiles(img, max_tiles=9)
+    # Reduzir tiles de 9 para 4 (2x2) - mais rápido
+    tiles = tiling.generate_adaptive_tiles(img, max_tiles=4)
     log_main(f"[ocr_anchors] gerados {len(tiles)} tiles")
     
     results = {}
     semaphore = asyncio.Semaphore(settings.max_concurrency)
     
-    async def extract_from_tile(field: str, tile: Image.Image, prompt: str):
+    async def extract_from_tile(field: str, tile: Image.Image, prompt: str, tile_pos: Tuple[int, int]):
         async with semaphore:
             result = await infer_field(tile, prompt, field)
-            return field, result
+            return field, result, tile_pos
     
-    # Try each field on each tile until found
+    # Processar todos os campos em paralelo nos tiles (mais eficiente)
+    tasks = []
     for field in missing_fields:
         prompt = FieldExtractorPrompts.get_prompt(field)
         if not prompt:
             continue
-        
-        found = False
-        for tile, (col, row) in tiles:
-            if found:
-                break
-            
-            field_name, result = await extract_from_tile(field, tile, prompt)
-            if result and result.get(field):
-                results.update(result)
-                log_main(f"[ocr_anchors] {field} encontrado no tile ({col}, {row})")
-                found = True
-        
-        if not found:
+        for tile, tile_pos in tiles:
+            tasks.append(extract_from_tile(field, tile, prompt, tile_pos))
+    
+    # Executar todas as tarefas em paralelo
+    all_results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Processar resultados - parar no primeiro match por campo
+    found_fields = set()
+    for result in all_results:
+        if isinstance(result, Exception):
+            continue
+        field, data, tile_pos = result
+        if field in found_fields:
+            continue
+        if data and data.get(field):
+            results.update(data)
+            log_main(f"[ocr_anchors] {field} encontrado no tile {tile_pos}")
+            found_fields.add(field)
+    
+    for field in missing_fields:
+        if field not in found_fields:
             log_main(f"[ocr_anchors] {field} não encontrado em nenhum tile")
     
     return results
@@ -376,14 +386,17 @@ async def extract_energy(
     log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
     payload.update(anchor_results)
     
-    # Step 2: Fallback for missing fields via tiling
+    # Step 2: Fallback for missing fields via tiling (só se realmente faltar e não muitos)
     missing_fields = [f for f in anchor_fields if not payload.get(f)]
-    if missing_fields:
+    if missing_fields and len(missing_fields) <= 2:  # Só usa tiling se faltar 2 ou menos campos
+        log_main(f"[ocr_anchors] usando tiling para {len(missing_fields)} campos faltantes: {missing_fields}")
         t_tiling_start = time.time()
         tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
         t_tiling_end = time.time()
         log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
         payload.update(tiling_results)
+    elif missing_fields:
+        log_main(f"[ocr_anchors] muitos campos faltantes ({len(missing_fields)}), pulando tiling (muito lento)")
     
     # Step 3: Use YOLO for customer address and consumption (keep existing logic)
     customer_crop_img = None

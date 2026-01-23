@@ -52,9 +52,8 @@ async def infer_field(img: Image.Image, prompt: str, field_name: str) -> Optiona
             cmd = [
                 sys.executable, "-m", "mlx_vlm.generate",
                 "--model", settings.model_id,
-                "--max-tokens", "200",  # Short prompts = less tokens
-                "--temperature", str(settings.temperature),
-                "--verbose",
+                "--max-tokens", "100",  # Prompts muito curtos, 100 tokens é suficiente
+                "--temperature", "0.0",  # Determinístico e mais rápido
                 "--prompt", prompt,
                 "--image", temp_img_path,
             ]
@@ -63,7 +62,7 @@ async def infer_field(img: Image.Image, prompt: str, field_name: str) -> Optiona
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30,  # Shorter timeout for small crops
+                timeout=15,  # Timeout mais curto - crops pequenos devem ser rápidos
             )
             
             if result.returncode != 0:
