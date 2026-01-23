@@ -1026,6 +1026,11 @@ async def extract_energy(
             # Extrai JSON imediatamente
             if result_consumption:
                 try:
+                    # Log completo da saída bruta do modelo ANTES do _extract_json
+                    log(f"[consumo] SAÍDA BRUTA DO MODELO (COMPLETA):")
+                    log(f"[consumo] {result_consumption}")
+                    log(f"[consumo] TAMANHO: {len(result_consumption)} caracteres")
+                    
                     payload_consumption = _extract_json(result_consumption)
                     # Garante que tem consumo_lista
                     if not isinstance(payload_consumption, dict) or 'consumo_lista' not in payload_consumption:
