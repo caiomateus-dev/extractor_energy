@@ -427,20 +427,30 @@ async def extract_energy(
     payload_consumption = None
     if consumption_crop_img:
         try:
+            t_consumption_start = time.time()
             prompt_consumption = _read_consumption_prompt()
+            log_main(f"[ocr_anchors] extraindo consumo do crop YOLO...")
             result_consumption = await _infer_one_full(consumption_crop_img, prompt_consumption)
+            t_consumption_end = time.time()
+            log_main(f"[ocr_anchors] inferência consumo concluída em {(t_consumption_end - t_consumption_start)*1000:.1f}ms")
+            
             payload_consumption = _extract_json(result_consumption)
+            log_main(f"[ocr_anchors] payload_consumption keys: {list(payload_consumption.keys()) if payload_consumption else 'None'}")
+            
             if payload_consumption and 'consumo_lista' in payload_consumption:
                 consumo_crop = payload_consumption['consumo_lista']
+                log_main(f"[ocr_anchors] consumo_crop type: {type(consumo_crop)}, value: {consumo_crop}")
                 if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
                     payload['consumo_lista'] = consumo_crop
                     log_main(f"[ocr_anchors] consumo extraído do crop: {len(consumo_crop)} itens")
                 else:
-                    log_main(f"[ocr_anchors] AVISO: consumo_lista vazio no crop")
+                    log_main(f"[ocr_anchors] AVISO: consumo_lista vazio no crop (type: {type(consumo_crop)}, len: {len(consumo_crop) if isinstance(consumo_crop, list) else 'N/A'})")
             else:
-                log_main(f"[ocr_anchors] AVISO: consumo_lista não encontrado no crop")
+                log_main(f"[ocr_anchors] AVISO: consumo_lista não encontrado no crop. payload_consumption: {payload_consumption}")
         except Exception as e:
             log_main(f"[ocr_anchors] erro ao extrair consumo: {e}")
+            import traceback
+            log_main(f"[ocr_anchors] traceback: {traceback.format_exc()}")
     else:
         log_main(f"[ocr_anchors] AVISO: crop de consumo não disponível (YOLO não detectou)")
     
@@ -479,9 +489,18 @@ async def extract_energy(
         
         # Use full image inference with base prompt for remaining fields
         try:
+            t_full_start = time.time()
             prompt_full = _read_prompt(concessionaria, uf)
+            log_main(f"[ocr_anchors] extraindo {len(missing_remaining)} campos do full-image...")
             result_full = await _infer_one_full(img_for_inference, prompt_full)
+            t_full_end = time.time()
+            log_main(f"[ocr_anchors] full-image inference concluída em {(t_full_end - t_full_start)*1000:.1f}ms")
+            
             payload_full = _extract_json(result_full)
+            log_main(f"[ocr_anchors] payload_full tem consumo_lista: {'consumo_lista' in payload_full if payload_full else False}")
+            if payload_full and 'consumo_lista' in payload_full:
+                consumo_full = payload_full['consumo_lista']
+                log_main(f"[ocr_anchors] consumo_full do full-image: type={type(consumo_full)}, len={len(consumo_full) if isinstance(consumo_full, list) else 'N/A'}")
             
             # Merge remaining fields (don't overwrite existing fields)
             for key in missing_remaining:
