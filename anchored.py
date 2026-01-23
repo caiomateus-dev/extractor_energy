@@ -103,9 +103,16 @@ _OBJECT_DETECTOR: Optional[ObjectDetection] = None
 def get_ocr_detector() -> Optional[OCRDetector]:
     """Get or create OCR detector (singleton)
     
+    NOTA: OCR detector não é mais usado por padrão - muito lento.
+    Mantido apenas para uso futuro/experimental.
+    
     Returns:
         OCRDetector instance or None if unavailable
     """
+    # Desabilitado - não inicializar OCR por padrão (muito lento)
+    return None
+    
+    # Código abaixo não é executado (mantido para referência futura)
     global _OCR_DETECTOR
     if _OCR_DETECTOR is None:
         try:
@@ -113,7 +120,7 @@ def get_ocr_detector() -> Optional[OCRDetector]:
             log_main("[ocr_anchors] OCR detector inicializado")
         except (RuntimeError, ImportError, OSError, Exception) as e:
             log_main(f"[ocr_anchors] AVISO: OCR não disponível: {e}")
-            _OCR_DETECTOR = None  # Explicitly set to None to avoid retrying
+            _OCR_DETECTOR = None
     return _OCR_DETECTOR
 
 
@@ -341,9 +348,12 @@ async def extract_energy(
     concessionaria: str = Form(...),
     uf: str = Form(...),
     file: UploadFile = File(...),
-    use_ocr_anchors: bool = Form(False),  # Desabilitado por padrão - muito lento
 ):
-    """Extract energy bill data using OCR-anchored pipeline"""
+    """Extract energy bill data - usa pipeline YOLO + full-image (mesmo do main.py)
+    
+    NOTA: Pipeline OCR-anchored foi desabilitado por ser muito lento (47s+).
+    Este endpoint agora usa a mesma estratégia do main.py: YOLO crops + full-image inference.
+    """
     t_request_start = time.time()
     log_main(f"[req] requisição recebida (OCR-anchored): concessionaria={concessionaria}, uf={uf}")
     
@@ -369,36 +379,8 @@ async def extract_energy(
     # Initialize result payload
     payload = {}
     
-    # OCR-ANCHORED PIPELINE DESABILITADO POR PADRÃO - muito lento (47s+)
-    # Use apenas para testes/debug. Pipeline original (YOLO + full-image) é mais rápido
-    if use_ocr_anchors:
-        log_main("[ocr_anchors] AVISO: Pipeline OCR-anchored habilitado (lento!)")
-        anchor_fields = [
-            'vencimento',
-            'mes_referencia',
-            'valor_fatura',
-            'aliquota_icms',
-            'cod_cliente',
-            'num_instalacao',
-        ]
-        
-        t_anchors_start = time.time()
-        anchor_results = await extract_fields_via_anchors(img, anchor_fields)
-        t_anchors_end = time.time()
-        anchor_time_ms = (t_anchors_end - t_anchors_start) * 1000
-        log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
-        payload.update(anchor_results)
-        
-        missing_fields = [f for f in anchor_fields if not payload.get(f)]
-        if missing_fields and len(missing_fields) <= 2:
-            log_main(f"[ocr_anchors] usando tiling para {len(missing_fields)} campos faltantes")
-            t_tiling_start = time.time()
-            tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
-            t_tiling_end = time.time()
-            log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
-            payload.update(tiling_results)
-    else:
-        log_main("[ocr_anchors] Pipeline OCR-anchored desabilitado (usando YOLO + full-image)")
+    # OCR-ANCHORED PIPELINE COMPLETAMENTE DESABILITADO - muito lento para produção (47s+)
+    # Pipeline original (YOLO + full-image) é muito mais rápido e eficiente
     
     # Step 3: Use YOLO for customer address and consumption (keep existing logic)
     customer_crop_img = None
