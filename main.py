@@ -999,6 +999,15 @@ async def extract_energy(
             if result_consumption:
                 try:
                     payload_consumption = _extract_json(result_consumption)
+                    # Se o modelo retornou formato individual (mes_ano/consumo) em vez de consumo_lista, converte
+                    # O prompt especifica claramente que deve retornar {"consumo_lista": [...]}
+                    if payload_consumption and 'mes_ano' in payload_consumption and 'consumo' in payload_consumption and 'consumo_lista' not in payload_consumption:
+                        consumo_item = {
+                            'mes_ano': str(payload_consumption.get('mes_ano', '')),
+                            'consumo': int(payload_consumption.get('consumo', 0))
+                        }
+                        payload_consumption = {'consumo_lista': [consumo_item]}
+                        log(f"[infer] AVISO: modelo NÃO seguiu o prompt (deveria retornar consumo_lista). Formato recebido: {payload_consumption}. Convertido para consumo_lista: {consumo_item}")
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
         except Exception as e:
@@ -1127,6 +1136,8 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
         consumo_crop = payload_consumption["consumo_lista"]
         consumo_full = payload.get("consumo_lista", [])
         
+        log(f"[consumo] crop tem {len(consumo_crop) if isinstance(consumo_crop, list) else 'N/A'} itens, full tem {len(consumo_full) if isinstance(consumo_full, list) else 'N/A'} itens")
+        
         # Só sobrescreve se:
         # 1. O crop tem lista não vazia E (payload_full não tem OU crop tem mais itens)
         # OU
@@ -1135,13 +1146,20 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
             if not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
                 # payload_full não tem dados, usa o crop
                 payload["consumo_lista"] = consumo_crop
+                log(f"[consumo] usando crop (full vazio): {len(consumo_crop)} itens")
             elif len(consumo_crop) > len(consumo_full):
                 # crop tem mais dados, usa o crop
                 payload["consumo_lista"] = consumo_crop
-            # Se ambos têm dados e crop não tem mais, mantém o payload_full
+                log(f"[consumo] usando crop (mais itens): {len(consumo_crop)} > {len(consumo_full)}")
+            else:
+                # Mantém o payload_full se ele tem mais ou igual quantidade de itens
+                log(f"[consumo] mantendo full (mais ou igual itens): {len(consumo_full)} >= {len(consumo_crop)}")
         elif not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
             # Se payload_full não tem dados, usa o crop mesmo que vazio
             payload["consumo_lista"] = consumo_crop
+            log(f"[consumo] usando crop (full vazio, crop também pode estar vazio)")
+    elif payload_consumption:
+        log(f"[consumo] AVISO: payload_consumption existe mas não tem 'consumo_lista'. Keys: {list(payload_consumption.keys())}")
     
     payload = _ensure_contract(payload, concessionaria_input=concessionaria, uf=uf)
 
