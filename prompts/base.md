@@ -51,7 +51,7 @@ REGRAS IMPORTANTES:
      - JUL = 07, AGO = 08, SET = 09, OUT = 10, NOV = 11, DEZ = 12
      - Exemplo: "OUT/2025" → "10/2025", "SET/2025" → "09/2025"
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
-   - vencimento e proximo_leitrua nunca devem ser iguais
+   - vencimento e proximo_leitura nunca devem ser iguais
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
 9. nome_cliente: Nome completo do cliente conforme aparece na fatura. O nome do cliente é APENAS a primeira linha da seção de identificação do cliente.
