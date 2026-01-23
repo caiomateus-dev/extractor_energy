@@ -998,20 +998,27 @@ async def extract_energy(
             # Extrai JSON imediatamente
             if result_consumption:
                 try:
-                    payload_consumption = _extract_json(result_consumption)
-                    # Se o modelo retornou formato individual (mes_ano/consumo) em vez de consumo_lista, converte
-                    # O prompt especifica claramente que deve retornar {"consumo_lista": [...]}
-                    if payload_consumption and 'consumo_lista' not in payload_consumption:
-                        # Verifica se tem mes_ano e consumo no nível raiz (formato individual)
-                        if 'mes_ano' in payload_consumption and 'consumo' in payload_consumption:
-                            consumo_item = {
-                                'mes_ano': str(payload_consumption.get('mes_ano', '')),
-                                'consumo': int(payload_consumption.get('consumo', 0))
-                            }
-                            payload_consumption = {'consumo_lista': [consumo_item]}
-                            log(f"[infer] AVISO: modelo NÃO seguiu o prompt (deveria retornar consumo_lista). Formato recebido tinha mes_ano/consumo no nível raiz. Convertido para consumo_lista: {consumo_item}")
+                    extracted = _extract_json(result_consumption)
+                    # O modelo deve retornar apenas o array: [{...}, {...}]
+                    # Mas pode retornar como objeto: {"consumo_lista": [...]} ou formato individual
+                    if isinstance(extracted, list):
+                        # Já é um array - formato correto
+                        payload_consumption = {'consumo_lista': extracted}
+                    elif isinstance(extracted, dict):
+                        if 'consumo_lista' in extracted:
+                            # Formato {"consumo_lista": [...]}
+                            payload_consumption = extracted
+                        elif 'mes_ano' in extracted and 'consumo' in extracted:
+                            # Formato individual {"mes_ano": "...", "consumo": 123}
+                            payload_consumption = {'consumo_lista': [extracted]}
+                        else:
+                            # Formato desconhecido
+                            payload_consumption = {'consumo_lista': []}
+                    else:
+                        payload_consumption = {'consumo_lista': []}
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
+                    payload_consumption = {'consumo_lista': []}
         except Exception as e:
             log(f"[infer] erro na inferência consumo: {e}")
             result_consumption = None
