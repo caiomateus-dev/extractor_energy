@@ -357,7 +357,8 @@ async def extract_energy(
         'num_instalacao',
     ]
     
-    # Step 1: Extract fields via OCR anchors
+    # Step 1: Extract fields via OCR anchors (DESABILITADO - muito lento)
+    # Pula direto para tiling que funciona melhor
     t_anchors_start = time.time()
     anchor_results = await extract_fields_via_anchors(img, anchor_fields)
     t_anchors_end = time.time()

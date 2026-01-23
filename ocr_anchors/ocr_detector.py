@@ -65,47 +65,23 @@ class OCRDetector:
             List of dicts with keys: 'bbox', 'text', 'score'
             bbox format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
         """
-        # Save image temporarily to use with PaddleOCR
         import tempfile
         import os
         
+        # Ensure RGB format
+        img_rgb = img.convert('RGB')
+        
+        # Save to temporary file - PaddleOCR works best with file paths
         temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
         try:
-            img.save(temp_img.name, format='JPEG', quality=95)
+            img_rgb.save(temp_img.name, format='JPEG', quality=95)
             temp_img_path = temp_img.name
-        except Exception:
+        except Exception as e:
             temp_img.close()
-            raise
+            raise RuntimeError(f"Falha ao salvar imagem temporária: {e}") from e
         
         try:
-            # Try new API (v3.x) first - uses predict()
-            if hasattr(self.ocr, 'predict'):
-                result = self.ocr.predict(input=temp_img_path)
-                # New API returns list of result objects
-                if not result or len(result) == 0:
-                    return []
-                
-                # Extract from first result
-                ocr_result = result[0]
-                if hasattr(ocr_result, 'ocr_result'):
-                    # New format: ocr_result.ocr_result is a list
-                    ocr_data = ocr_result.ocr_result
-                elif isinstance(ocr_result, dict) and 'ocr_result' in ocr_result:
-                    ocr_data = ocr_result['ocr_result']
-                else:
-                    ocr_data = ocr_result if isinstance(ocr_result, list) else []
-                
-                boxes = []
-                for item in ocr_data:
-                    if isinstance(item, dict):
-                        boxes.append({
-                            'bbox': item.get('bbox', []),
-                            'text': item.get('text', ''),
-                            'score': item.get('score', 0.0)
-                        })
-                return boxes
-            
-            # Fallback to old API (v2.x) - uses ocr()
+            # Use file path - most reliable method according to docs
             result = self.ocr.ocr(temp_img_path, cls=False)
             
             if not result or not result[0]:
