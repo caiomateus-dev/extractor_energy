@@ -29,8 +29,7 @@ class OCRDetector:
         # use_angle_cls=False for faster processing (we assume upright text)
         self.ocr = PaddleOCR(
             use_angle_cls=False,
-            lang=lang,
-            show_log=False
+            lang=lang
         )
     
     def detect_text_boxes(self, img: Image.Image) -> List[Dict[str, Any]]:
