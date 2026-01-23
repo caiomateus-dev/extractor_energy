@@ -5,9 +5,9 @@ RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
 Formato do JSON esperado:
 {
   "cep": "",
+  "bairro": "",
   "estado": "",
   "cidade": "",
-  "bairro": "",
   "rua": "",
   "numero": "",
   "complemento": ""
