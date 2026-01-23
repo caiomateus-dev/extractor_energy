@@ -657,6 +657,9 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
+                "--max-kv-size", "0",
+                "--kv-group-size", "0",
+                "--verbose",
             ]
             
             # Adiciona prompt: direto ou via arquivo
@@ -672,9 +675,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             
             cmd.extend(["--image", temp_img_path])
             
-            log(f"[infer] comando: {' '.join(cmd[:6])} ... --prompt [{len(prompt_text)} chars] --image {temp_img_path}")
-            log(f"[infer] prompt (primeiros 300 chars): {prompt_text[:300]}")
-            
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -688,8 +688,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
             
             output = result.stdout.strip()
-            log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
-            log(f"[infer] output bruto (últimos 1000 chars): {output[-1000:]}")
             
             def _find_balanced_json(text: str, start_char: str = '{') -> str | None:
                 """Encontra JSON completo com chaves/colchetes balanceados"""
@@ -747,8 +745,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 # Remove tokens de formatação restantes
                 response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
                 
-                log(f"[infer] seção resposta após assistant (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
-                
                 # Remove delimitadores markdown primeiro (se houver)
                 # Isso ajuda a encontrar o JSON real
                 cleaned_section = re.sub(r'```json\s*', '', response_section)
@@ -758,16 +754,13 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 # Tenta encontrar JSON completo com chaves balanceadas
                 json_start = cleaned_section.find('{')
                 if json_start != -1:
-                    log(f"[infer] encontrado {{ na posição {json_start}, tentando extrair JSON balanceado...")
                     balanced_json = _find_balanced_json(cleaned_section[json_start:], '{')
                     if balanced_json:
                         # Valida se o JSON é válido tentando fazer parse
                         try:
                             json.loads(balanced_json)
                             filtered_output = balanced_json
-                            log(f"[infer] JSON balanceado válido encontrado (tamanho: {len(balanced_json)} chars)")
-                        except json.JSONDecodeError as e:
-                            log(f"[infer] AVISO: JSON balanceado não é válido: {e}. Tentando fallback...")
+                        except json.JSONDecodeError:
                             # Fallback: tenta encontrar JSON válido de outra forma
                             # Procura pelo último } que fecha o objeto principal
                             last_brace = cleaned_section.rfind('}')
@@ -776,13 +769,11 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                                 try:
                                     json.loads(potential_json)
                                     filtered_output = potential_json
-                                    log(f"[infer] JSON válido encontrado via fallback (tamanho: {len(potential_json)} chars)")
                                 except json.JSONDecodeError:
                                     filtered_output = balanced_json  # Usa o que encontrou mesmo assim
                             else:
                                 filtered_output = balanced_json
                     else:
-                        log(f"[infer] AVISO: _find_balanced_json retornou None. Tentando fallback...")
                         # Fallback: procura pelo último } que fecha o objeto
                         last_brace = cleaned_section.rfind('}')
                         if last_brace > json_start:
@@ -790,7 +781,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                             try:
                                 json.loads(potential_json)
                                 filtered_output = potential_json
-                                log(f"[infer] JSON válido encontrado via fallback rfind (tamanho: {len(potential_json)} chars)")
                             except json.JSONDecodeError:
                                 # Último recurso: tenta lista JSON
                                 list_start = cleaned_section.find('[')
@@ -847,7 +837,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                     # Último recurso: retorna o output completo
                     filtered_output = output
             
-            log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
             return filtered_output
         finally:
             # Remove arquivos temporários
@@ -991,7 +980,6 @@ async def extract_energy(
             if result_customer:
                 try:
                     payload_customer = _extract_json(result_customer)
-                    log(f"[infer] JSON cliente/endereço extraído: {json.dumps(payload_customer, ensure_ascii=False)[:200]}")
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON cliente/endereço: {e}")
         except Exception as e:
@@ -1012,7 +1000,6 @@ async def extract_energy(
             if result_consumption:
                 try:
                     payload_consumption = _extract_json(result_consumption)
-                    log(f"[infer] JSON consumo extraído: {json.dumps(payload_consumption, ensure_ascii=False)[:200]}")
                 except Exception as e:
                     log(f"[infer] ERRO ao extrair JSON consumo: {e}")
         except Exception as e:
@@ -1104,10 +1091,8 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     if result_full:
         try:
             payload_full = _extract_json(result_full)
-            log(f"[infer] JSON imagem completa extraído: {json.dumps(payload_full, ensure_ascii=False)[:200]}")
         except Exception as e:
             log(f"[infer] ERRO ao extrair JSON imagem completa: {e}")
-            log(f"[infer] resposta completa: {result_full[:500]}")
     
     # Combina resultados: dados gerais da imagem completa
     payload = payload_full.copy()

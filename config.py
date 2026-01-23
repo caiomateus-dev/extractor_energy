@@ -9,7 +9,7 @@ class Settings(BaseModel):
     # Valores conservadores para evitar alocações gigantes no Metal (limite de buffer).
     # Aumentado para garantir que o JSON completo seja gerado
     max_tokens: int = 1500
-    temperature: float = 0.0
+    temperature: float = 1.0
 
     max_image_mb: int = 12
     # Reduzido drasticamente para evitar alocações excessivas no Metal

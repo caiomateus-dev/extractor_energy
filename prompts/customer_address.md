@@ -46,8 +46,10 @@ EXTRAÇÃO PASSO A PASSO
 3. complemento: 
    - Tudo que vem após a rua e antes do bairro
    - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos no complemento
-   - CRÍTICO: Se aparecer "Q. 4, L. 11" → inclua "Q. 4, L. 11" no complemento
+   - CRÍTICO: Leia os números com ATENÇÃO. Se aparecer "L. 11" → extraia "L. 11" (NÃO "L. 5/N", NÃO confunda números com "S/N")
+   - CRÍTICO: Se aparecer "Q. 4, L. 11" → inclua "Q. 4, L. 11" no complemento (leia os números corretamente)
    - CRÍTICO: Se aparecer "Q. 4, L. 11, APART. 106" → inclua TUDO: "Q. 4, L. 11, APART. 106"
+   - CRÍTICO: NÃO confunda números (como "11") com "S/N". "S/N" é texto separado que vai no campo numero
    - Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento
    - Se não houver complemento, use "" (string vazia)
@@ -89,6 +91,8 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 3. complemento: Elementos após rua e antes do bairro
    - CRÍTICO: Se aparecer "Q." (Quadra) ou "L." (Lote) no endereço, eles DEVEM ser incluídos
+   - CRÍTICO: Leia os números com ATENÇÃO. Se aparecer "L. 11" → extraia "L. 11" (NÃO confunda com "L. 5/N" ou "S/N")
+   - CRÍTICO: NÃO confunda números (como "11") com "S/N". "S/N" é texto separado
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - NÃO inclua "S/N"
 
