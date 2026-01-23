@@ -19,12 +19,15 @@ EXTRAÇÃO PASSO A PASSO
 
 SIGA ESTA ORDEM EXATA para extrair os campos do endereço:
 
-1. rua: Primeira parte do endereço até a primeira vírgula (ou até encontrar "Q.", "L.", "S/N", etc.)
-   - Se aparecer "RUA SEM NOME" → extraia "RUA SEM NOME" completo
+1. rua: Primeira parte do endereço que SEMPRE começa com "RUA", "AVENIDA", "ESTRADA", "RODOVIA", etc.
+   - CRÍTICO: O campo rua SEMPRE começa com uma dessas palavras: "RUA", "AVENIDA", "ESTRADA", "RODOVIA"
+   - Se aparecer "RUA SEM NOME" → extraia "RUA SEM NOME" completo (NÃO "PARQUE NAPOLIS")
    - Se aparecer "RUA 01" → extraia "RUA 01" completo (o número faz parte do nome)
    - Se aparecer "AVENIDA X" → extraia "AVENIDA X" completo
    - CRÍTICO: Pare na primeira vírgula. Tudo antes da primeira vírgula é a rua.
-   - NÃO inclua Quadra (Q.), Lote (L.), número (S/N), apartamento, etc. no campo rua
+   - CRÍTICO: Se a primeira palavra NÃO for "RUA", "AVENIDA", "ESTRADA", "RODOVIA", você está ERRADO. Procure novamente.
+   - NÃO inclua Quadra (Q.), Lote (L.), número (S/N), apartamento, bairro, etc. no campo rua
+   - NÃO confunda bairro com rua. Bairro vem DEPOIS do complemento na linha do endereço
 
 2. numero: Número do endereço ou "S/N"
    - Se aparecer "S/N" ou "Sem Número" → use "S/N"
@@ -38,11 +41,13 @@ SIGA ESTA ORDEM EXATA para extrair os campos do endereço:
    - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento (ele vai em numero)
    - Se não houver complemento, use "" (string vazia)
 
-4. bairro: Nome completo do bairro incluindo prefixos
+4. bairro: Nome completo do bairro que aparece DEPOIS do complemento na linha do endereço
+   - CRÍTICO: O bairro vem DEPOIS do complemento, NÃO antes. Se você colocou bairro em rua, está ERRADO.
    - Se aparecer "PARQUE NAPOLIS A" → extraia "PARQUE NAPOLIS A" completo (incluindo o "A")
    - Se aparecer "JARDIM PRIMAVERA" → extraia "JARDIM PRIMAVERA" completo
    - Se aparecer "VILA NOVA" → extraia "VILA NOVA" completo
    - CRÍTICO: Extraia EXATAMENTE como aparece na fatura, incluindo letras, números e prefixos
+   - CRÍTICO: O bairro NÃO começa com "RUA" ou "AVENIDA". Se você colocou algo que começa com "RUA" em bairro, está ERRADO.
 
 5. cidade: Nome da cidade que aparece ANTES da sigla do estado
    - Extraia APENAS da linha do endereço do cliente
@@ -72,6 +77,11 @@ EXTRAÇÃO CORRETA:
 - estado: "GO"
 - cep: "72885173"
 
+EXEMPLO DE ERRO GRAVE (NUNCA FAÇA ISSO):
+- rua: "PARQUE NAPOLIS" → ERRADO! Rua deve começar com "RUA", "AVENIDA", etc.
+- bairro: "RUA SEM NOME" → ERRADO! Bairro não começa com "RUA"
+- Se você extraiu "PARQUE NAPOLIS" como rua, você está ERRADO. Procure por "RUA SEM NOME" no início do endereço.
+
 ==========================
 VALIDAÇÃO OBRIGATÓRIA
 ==========================
@@ -79,8 +89,10 @@ VALIDAÇÃO OBRIGATÓRIA
 ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 1. rua: Deve conter apenas o nome da rua/avenida (até a primeira vírgula)
+   - CRÍTICO: Deve SEMPRE começar com "RUA", "AVENIDA", "ESTRADA", "RODOVIA"
    - NÃO deve conter Quadra, Lote, número, apartamento, bairro
-   - Se aparecer "RUA SEM NOME" → rua = "RUA SEM NOME" (NÃO "PARQUE NAPOLES")
+   - Se aparecer "RUA SEM NOME" → rua = "RUA SEM NOME" (NÃO "PARQUE NAPOLES", NÃO "PARQUE NAPOLIS")
+   - Se você colocou algo que NÃO começa com "RUA"/"AVENIDA" em rua → ERRO GRAVE. Procure novamente.
 
 2. numero: Deve ser "S/N" ou um número de endereço
    - "S/N" NUNCA vai em complemento
@@ -90,8 +102,10 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
    - NÃO inclua "S/N" no complemento
 
 4. bairro: Deve ser o nome completo do bairro como aparece na fatura
+   - CRÍTICO: O bairro vem DEPOIS do complemento na linha do endereço
+   - CRÍTICO: O bairro NÃO começa com "RUA" ou "AVENIDA"
    - Inclua prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números)
-   - NÃO confunda bairro com rua
+   - NÃO confunda bairro com rua. Se você colocou bairro em rua, está ERRADO.
 
 5. cidade, estado, cep: Devem vir APENAS da linha do endereço do cliente
 
