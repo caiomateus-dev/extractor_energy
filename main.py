@@ -657,8 +657,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
-                "--max-kv-size", "0",
-                "--kv-group-size", "0",
                 "--verbose",
             ]
             
@@ -737,6 +735,7 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             # Procura por esse marcador e pega tudo depois
             assistant_marker = '<|im_start|>assistant'
             assistant_pos = output.find(assistant_marker)
+            filtered_output = output  # Inicialização padrão
             
             if assistant_pos >= 0:
                 # Pega tudo após o marcador assistant
