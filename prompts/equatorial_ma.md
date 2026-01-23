@@ -125,15 +125,14 @@ ENDEREÇO - REGRAS ESPECÍFICAS EQUATORIAL
 ==========================
 
 REGRA CRÍTICA PARA ENDEREÇOS EQUATORIAL:
-- numero: Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero` (NÃO em `complemento`)
-- complemento: Use apenas para informações como "L. 22", "Q. 3", "Bloco A", "Apto 101", etc.
-- Se aparecer "L. 22, S/N", extraia:
-  - numero: "S/N"
-  - complemento: "L. 22"
-- Se aparecer apenas "S/N" sem outras informações, extraia:
-  - numero: "S/N"
-  - complemento: ""
 
+- rua: Nome completo da rua/avenida. Se aparecer "RUA" ou "AVENIDA" seguido de números, esses números fazem parte do nome da rua. NÃO extraia esses números como campo `numero`.
+- numero: Se aparecer "S/N" ou "Sem Número" no endereço, coloque "S/N" no campo `numero` (NUNCA em `complemento`). Se houver um número de endereço explícito, extraia-o.
+- complemento: Use para informações como Quadra (Q.), Lote (L.), Bloco, Apto, etc. Se aparecer "S/N" junto com complemento, extraia apenas o complemento (sem o S/N).
+- bairro: Nome completo do bairro incluindo prefixos como "VILA", "JARDIM", "CONJUNTO", etc.
+- cep: Procure por "CEP:" seguido de números. Extraia apenas os números (sem formatação). NÃO use valores de outras partes da fatura.
+- cidade: Nome da cidade que aparece ANTES da sigla do estado. NÃO confunda com outras cidades que possam aparecer na fatura.
+- estado: Sigla de 2 letras que aparece após o nome da cidade.
 ==========================
 CONTA CONTRATO
 ==========================

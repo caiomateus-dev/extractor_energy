@@ -16,7 +16,7 @@ import re
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 from config import settings
 
@@ -601,6 +601,22 @@ def _read_consumption_prompt() -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def _enhance_address_image(img: Image.Image) -> Image.Image:
+    """
+    Aplica pré-processamento de contraste na imagem de endereço para melhorar a legibilidade.
+    Aumenta o contraste para deixar a fonte mais forte e facilitar a extração.
+    """
+    try:
+        # Aplica enhancement de contraste (fator 1.3 = 30% mais contraste)
+        enhancer = ImageEnhance.Contrast(img)
+        enhanced_img = enhancer.enhance(1.3)
+        log("[img] contraste aplicado na imagem de endereço (fator 1.3)")
+        return enhanced_img
+    except Exception as e:
+        log(f"[img] erro ao aplicar contraste: {e}, usando imagem original")
+        return img
+
+
 async def _infer_one(img: Image.Image, prompt_text: str) -> str:
     if not _HAS_MLX_VLM:
         raise RuntimeError("Dependência MLX-VLM indisponível para inferência.")
@@ -984,8 +1000,10 @@ async def extract_energy(
         try:
             t_infer1_start = time.time()
             log("[infer] iniciando inferência recorte cliente/endereço")
+            # Aplica pré-processamento de contraste na imagem de endereço
+            customer_crop_img_enhanced = _enhance_address_image(customer_crop_img)
             prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-            result_customer = await _infer_one(customer_crop_img, prompt_customer)
+            result_customer = await _infer_one(customer_crop_img_enhanced, prompt_customer)
             t_infer1_end = time.time()
             log(f"[timing] inferência cliente: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
             
