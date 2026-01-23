@@ -25,6 +25,9 @@ REGRAS CRÍTICAS:
 - CRÍTICO: NÃO retorne apenas {"mes_ano": "...", "consumo": 123}. SEMPRE retorne {"consumo_lista": [...]} com TODOS os meses (até 13)!
 - mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
 - consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
+- CRÍTICO: O consumo é um número SIMPLES. Se a tabela mostra "90", retorne 90. Se mostra "14", retorne 14. NÃO multiplique por 1000!
+- CRÍTICO: NÃO adicione zeros extras. Se a tabela mostra "90 kWh", retorne consumo: 90, NÃO 9000 ou 90000!
+- CRÍTICO: O consumo deve ser o número EXATO que aparece na tabela, sem multiplicações ou conversões!
 
 CONVERSÃO DE MESES:
 A tabela pode mostrar meses em formato abreviado (ex: "OUT/25", "SET/25", "AGO/25", "JUL/25", "JUN/25", "MAI/25", "ABR/25", "MAR/25", "FEV/25", "JAN/25", "DEZ/24", "NOV/24").
@@ -46,6 +49,8 @@ IMPORTANTE:
 - Mantenha a ordem da tabela (geralmente do mais recente para o mais antigo)
 - Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
 - Cada entrada deve ter o mês/ano EXATO da tabela e o consumo correspondente em kWh (número inteiro)
+- CRÍTICO: O consumo é o número EXATO da tabela. Se mostra "90", use 90. Se mostra "14", use 14. NÃO multiplique por 1000 ou adicione zeros!
+- CRÍTICO: Se a tabela mostra "90 kWh", o consumo é 90, não 9000, não 90000, não 900000. APENAS 90!
 
 LIMITE ABSOLUTO: 13 ITENS. NÃO MAIS QUE ISSO. PARE NO 13º ITEM!
 
@@ -65,3 +70,7 @@ Retorne:
 
 NÃO retorne apenas:
 {"mes_ano": "09/2024", "consumo": 74}
+
+EXEMPLO DE ERRO COMUM (NÃO FAÇA ISSO):
+Se a tabela mostra "90 kWh", NÃO retorne consumo: 9000 ou 90000.
+Retorne APENAS consumo: 90 (o número exato da tabela).
