@@ -28,6 +28,9 @@ REGRAS CRÍTICAS:
 - CRÍTICO: O consumo é um número SIMPLES. Se a tabela mostra "90", retorne 90. Se mostra "14", retorne 14. NÃO multiplique por 1000!
 - CRÍTICO: NÃO adicione zeros extras. Se a tabela mostra "90 kWh", retorne consumo: 90, NÃO 9000 ou 90000!
 - CRÍTICO: O consumo deve ser o número EXATO que aparece na tabela, sem multiplicações ou conversões!
+- CRÍTICO ABSOLUTO: NÃO invente valores! Cada mês tem seu próprio valor na tabela. NÃO repita o mesmo valor para todos os meses!
+- CRÍTICO ABSOLUTO: Se a tabela mostra valores diferentes para cada mês, extraia CADA valor específico. NÃO use o mesmo número para todos!
+- CRÍTICO ABSOLUTO: NÃO alucine valores! Use APENAS os números que aparecem na tabela, exatamente como estão escritos!
 
 CONVERSÃO DE MESES:
 A tabela pode mostrar meses em formato abreviado (ex: "OUT/25", "SET/25", "AGO/25", "JUL/25", "JUN/25", "MAI/25", "ABR/25", "MAR/25", "FEV/25", "JAN/25", "DEZ/24", "NOV/24").
@@ -51,6 +54,9 @@ IMPORTANTE:
 - Cada entrada deve ter o mês/ano EXATO da tabela e o consumo correspondente em kWh (número inteiro)
 - CRÍTICO: O consumo é o número EXATO da tabela. Se mostra "90", use 90. Se mostra "14", use 14. NÃO multiplique por 1000 ou adicione zeros!
 - CRÍTICO: Se a tabela mostra "90 kWh", o consumo é 90, não 9000, não 90000, não 900000. APENAS 90!
+- CRÍTICO ABSOLUTO: CADA mês tem seu próprio valor na tabela. NÃO repita o mesmo valor para múltiplos meses!
+- CRÍTICO ABSOLUTO: Se a tabela mostra "01/2025: 140, 02/2025: 90, 03/2025: 83", retorne exatamente esses valores. NÃO use 140 para todos!
+- CRÍTICO ABSOLUTO: NÃO invente valores uniformes! Cada linha da tabela tem um valor específico - extraia CADA um deles!
 
 LIMITE ABSOLUTO: 13 ITENS. NÃO MAIS QUE ISSO. PARE NO 13º ITEM!
 
@@ -74,3 +80,19 @@ NÃO retorne apenas:
 EXEMPLO DE ERRO COMUM (NÃO FAÇA ISSO):
 Se a tabela mostra "90 kWh", NÃO retorne consumo: 9000 ou 90000.
 Retorne APENAS consumo: 90 (o número exato da tabela).
+
+EXEMPLO DE ERRO GRAVE DE ALUCINAÇÃO (NÃO FAÇA ISSO):
+Se a tabela mostra:
+01/2025: 140 kWh
+02/2025: 90 kWh
+03/2025: 83 kWh
+
+NÃO retorne todos com o mesmo valor:
+{"mes_ano": "01/2025", "consumo": 140},
+{"mes_ano": "02/2025", "consumo": 140},  ← ERRADO! Deveria ser 90
+{"mes_ano": "03/2025", "consumo": 140}   ← ERRADO! Deveria ser 83
+
+Retorne os valores EXATOS de cada mês:
+{"mes_ano": "01/2025", "consumo": 140},
+{"mes_ano": "02/2025", "consumo": 90},   ← CORRETO
+{"mes_ano": "03/2025", "consumo": 83}    ← CORRETO
