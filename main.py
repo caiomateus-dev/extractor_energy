@@ -1023,14 +1023,20 @@ async def extract_energy(
             t_infer2_end = time.time()
             log(f"[timing] inferência consumo: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
             
+            # Log completo da saída BRUTA do modelo ANTES de qualquer processamento
+            if result_consumption:
+                log(f"[consumo] ========== SAÍDA BRUTA DO MODELO (ANTES DO _extract_json) ==========")
+                log(f"[consumo] TIPO: {type(result_consumption)}")
+                log(f"[consumo] TAMANHO: {len(result_consumption)} caracteres")
+                log(f"[consumo] CONTEÚDO COMPLETO:")
+                # Log linha por linha para não perder nada
+                for i, line in enumerate(result_consumption.split('\n'), 1):
+                    log(f"[consumo] LINHA {i}: {repr(line)}")
+                log(f"[consumo] ========== FIM SAÍDA BRUTA ==========")
+            
             # Extrai JSON imediatamente
             if result_consumption:
                 try:
-                    # Log completo da saída bruta do modelo ANTES do _extract_json
-                    log(f"[consumo] SAÍDA BRUTA DO MODELO (COMPLETA):")
-                    log(f"[consumo] {result_consumption}")
-                    log(f"[consumo] TAMANHO: {len(result_consumption)} caracteres")
-                    
                     payload_consumption = _extract_json(result_consumption)
                     # Garante que tem consumo_lista
                     if not isinstance(payload_consumption, dict) or 'consumo_lista' not in payload_consumption:
