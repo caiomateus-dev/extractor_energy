@@ -699,7 +699,6 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
-                "--no-kv-cache",  # Desabilita KV cache
             ]
             
             # Adiciona prompt: direto ou via arquivo
