@@ -45,7 +45,8 @@ class OCRDetector:
                 use_doc_orientation_classify=False,
                 use_textline_orientation=True,
                 text_det_limit_type="max",
-                text_det_limit_side_len=1536,
+                text_det_limit_side_len=960,  # Reduzido de 1536 para acelerar (menos qualidade mas mais rápido)
+                text_recognition_batch_size=8,  # Batch processing para acelerar
             )
         except (ImportError, OSError, Exception) as e:
             error_detail = str(e)

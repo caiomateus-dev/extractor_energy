@@ -205,10 +205,8 @@ async def extract_fields_via_anchors(
         log_main("[ocr_anchors] AVISO: Nenhum texto detectado pelo OCR")
         return results
     
-    # Skip OCR anchor detection if it took too long (>10s) - not worth it
-    if ocr_time_ms > 10000:
-        log_main(f"[ocr_anchors] OCR muito lento ({ocr_time_ms:.1f}ms), pulando detecção de âncoras")
-        return results
+    # OCR pode ser lento, mas se já rodou e encontrou textos, vamos usar
+    # O trabalho pesado já foi feito, então vale a pena usar os resultados
     
     # Step 2: Find anchors for each field
     anchor_detector = get_anchor_detector()
