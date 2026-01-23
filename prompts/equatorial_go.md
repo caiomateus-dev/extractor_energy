@@ -45,14 +45,22 @@ LOCALIZAÇÃO DOS CAMPOS
    - Use ponto como separador decimal no JSON
    - Converta vírgula para ponto (ex: "180,24" → 180.24)
 
-7. vencimento: Procure em uma CAIXA AMARELA no lado direito, próximo a "Vencimento".
+7. vencimento: Procure em uma CAIXA AMARELA no lado direito, próximo a "Vencimento" e próximo ao "Total a pagar".
+   - CRÍTICO: Este campo aparece PRÓXIMO ao valor total da fatura ("Total a pagar"), em uma caixa amarela destacada
+   - Procure pela palavra "Vencimento" escrita explicitamente na fatura
    - Formato: "DD/MM/AAAA"
-   - Exemplos: "01/08/2025"
+   - Exemplos: "01/08/2025", "29/07/2025"
+   - NÃO confunda com "Próxima Leitura" - são campos completamente diferentes e em locais diferentes da fatura
 
-8. proximo_leitura: Procure na seção "Datas das Leituras", na linha "Próxima Leitura".
+8. proximo_leitura: Procure na seção "Datas das Leituras" ou "Leituras" ou tabela de leituras, na linha "Próxima Leitura" ou "Próxima leitura".
+   - CRÍTICO: Este campo aparece em uma seção COMPLETAMENTE DIFERENTE de "Vencimento"
+   - "Vencimento" está próximo ao "Total a pagar" (parte superior da fatura)
+   - "Próxima Leitura" está na seção de leituras do medidor (geralmente no meio ou parte inferior da fatura)
    - Formato: "DD/MM/AAAA"
    - Exemplos: "12/08/2025"
-   - Se não encontrar explicitamente, use null
+   - Se não encontrar explicitamente a seção "Próxima Leitura", use "" (string vazia)
+   - NUNCA use o mesmo valor de "vencimento" - são campos completamente diferentes e em locais diferentes
+   - Se você não encontrar "Próxima Leitura" na seção de leituras, use "" (não invente)
 
 9. aliquota_icms: Procure na tabela "Datas das Leituras", na coluna "Aliquota ICMS(%)".
    - Valores comuns: 19.00
