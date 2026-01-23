@@ -2,15 +2,17 @@ Analise esta imagem que contém APENAS dados de consumo médio de uma fatura de 
 
 RETORNE APENAS UM JSON VÁLIDO, sem markdown, sem texto antes ou depois do JSON.
 
-Formato do JSON esperado (APENAS O ARRAY):
-[
-  {"mes_ano": "MM/AAAA", "consumo": 123},
-  {"mes_ano": "MM/AAAA", "consumo": 456}
-]
+Formato do JSON esperado:
+{
+  "consumo_lista": [
+    {"mes_ano": "MM/AAAA", "consumo": 123},
+    {"mes_ano": "MM/AAAA", "consumo": 456}
+  ]
+}
 
 REGRAS CRÍTICAS:
-- Retorne APENAS um array de objetos com histórico de consumo mensal na ORDEM EXATA que aparece na tabela
-- CRÍTICO: MÁXIMO de 13 itens no array. Se houver mais de 13 meses na tabela, extraia apenas os 13 mais recentes
+- consumo_lista: Lista de objetos com histórico de consumo mensal na ORDEM EXATA que aparece na tabela
+- CRÍTICO: MÁXIMO de 13 itens na lista. Se houver mais de 13 meses na tabela, extraia apenas os 13 mais recentes
 - CRÍTICO: Extraia TODOS os meses que aparecem na tabela (até 13 itens). Não extraia apenas 1 mês!
 - mes_ano: Formato "MM/AAAA" (ex: "01/2024", "12/2025")
 - consumo: Número inteiro representando o consumo em kWh (quilowatt-hora)
@@ -30,5 +32,5 @@ IMPORTANTE:
 - NÃO invente meses sequenciais (01, 02, 03...). Use os meses reais da tabela
 - NÃO extraia apenas 1 mês - extraia TODA a tabela de histórico de consumo
 - Mantenha a ordem da tabela (geralmente do mais recente para o mais antigo)
-- Se não encontrar dados de consumo ou a lista estiver vazia, retorne: []
+- Se não encontrar dados de consumo ou a lista estiver vazia, retorne: {"consumo_lista": []}
 - Cada entrada deve ter o mês/ano EXATO da tabela e o consumo correspondente em kWh (número inteiro)
