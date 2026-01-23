@@ -29,6 +29,21 @@ NUNCA coloque no campo "rua":
 - Qualquer texto que NÃO começa com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA"
 
 ==========================
+ORDEM DOS CAMPOS NO ENDEREÇO
+==========================
+
+A linha do endereço segue esta ordem EXATA:
+1. RUA (começa com "RUA", "AVENIDA", etc.)
+2. COMPLEMENTO (Q., L., APART., etc.)
+3. BAIRRO
+4. CEP (se houver)
+5. CIDADE
+6. ESTADO
+
+CRÍTICO: Bairro vem ANTES da cidade. Cidade vem ANTES do estado.
+Se você colocou o mesmo valor em bairro e cidade, você está ERRADO.
+
+==========================
 EXTRAÇÃO PASSO A PASSO
 ==========================
 
@@ -49,7 +64,8 @@ EXTRAÇÃO PASSO A PASSO
    - CRÍTICO: Se aparecer "Q." (Quadra) no endereço, ela DEVE ser incluída no complemento
    - CRÍTICO: Se aparecer "L." (Lote) no endereço, ele DEVE ser incluído no complemento
    - CRÍTICO: Se aparecerem ambos "Q." e "L." no endereço, AMBOS devem estar no complemento
-   - CRÍTICO: Leia os números com MUITA ATENÇÃO. NÃO confunda números com "S/N" ou outros textos
+   - CRÍTICO: Leia CADA NÚMERO com MUITA ATENÇÃO. Leia caractere por caractere
+   - CRÍTICO: NÃO confunda números com "S/N" ou outros textos. Números são apenas dígitos
    - CRÍTICO: "S/N" é texto que aparece separado e vai no campo numero. NÃO confunda números com "S/N"
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - Se aparecer "S/N" junto com complemento, NÃO inclua o "S/N" no complemento
@@ -57,17 +73,20 @@ EXTRAÇÃO PASSO A PASSO
 
 4. bairro: 
    - Nome completo do bairro que aparece DEPOIS do complemento na linha do endereço
-   - O bairro vem DEPOIS do complemento, NÃO antes
-   - CRÍTICO: Extraia EXATAMENTE como aparece na fatura, incluindo TODOS os caracteres (letras, números, espaços, sufixos)
-   - CRÍTICO: NÃO confunda bairro com cidade. Bairro vem antes da cidade na linha do endereço
+   - O bairro vem DEPOIS do complemento e ANTES da cidade
+   - CRÍTICO: Leia CADA LETRA e CARACTERE com atenção. Extraia EXATAMENTE como aparece
+   - CRÍTICO: Inclua TODOS os caracteres: letras, números, espaços, sufixos (incluindo letras soltas no final)
+   - CRÍTICO: NÃO confunda bairro com cidade. Bairro vem ANTES da cidade na linha do endereço
+   - CRÍTICO: Se você colocou o mesmo valor em bairro e cidade, está ERRADO. Procure novamente
    - Inclua prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números, etc.) se aparecerem
    - O bairro NÃO começa com "RUA" ou "AVENIDA"
 
 5. cidade: 
    - Nome da cidade que aparece ANTES da sigla do estado na linha do endereço
-   - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
+   - CRÍTICO: A cidade vem DEPOIS do bairro e ANTES do estado na linha do endereço
    - CRÍTICO: Bairro e cidade são CAMPOS DIFERENTES. Se você colocou o mesmo valor em ambos, está ERRADO
    - CRÍTICO: O valor de cidade DEVE ser diferente do valor de bairro. Se forem iguais, você está ERRADO
+   - CRÍTICO: Procure na linha do endereço pelo nome que aparece ANTES da sigla do estado (GO, MG, SP, etc.)
    - Extraia APENAS da linha do endereço do cliente
    - NÃO use cidade da distribuidora ou outras seções
 
@@ -126,9 +145,11 @@ ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
    - Se você não incluiu "Q." ou "L." no complemento mas eles aparecem no endereço → ERRO GRAVE
 
 2. bairro e cidade: Eles DEVEM ser diferentes
-   - Se bairro == cidade → ERRO GRAVE. Procure novamente na linha do endereço
-   - Bairro vem antes da cidade na linha do endereço
-   - Se você colocou o mesmo valor em ambos, você está ERRADO
+   - CRÍTICO: Se bairro == cidade → ERRO GRAVE. Você está ERRADO
+   - CRÍTICO: Na linha do endereço, bairro vem ANTES da cidade
+   - CRÍTICO: Cidade vem ANTES da sigla do estado (GO, MG, SP, etc.)
+   - CRÍTICO: Se você colocou o mesmo valor em ambos, PROCURE NOVAMENTE na linha do endereço
+   - CRÍTICO: O nome que vem ANTES da sigla do estado é a cidade, NÃO o bairro
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
