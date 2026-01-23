@@ -424,18 +424,29 @@ async def extract_energy(
             log_main(f"[ocr_anchors] erro ao extrair endereço: {e}")
     
     # Extract consumption (using YOLO crop)
+    payload_consumption = None
     if consumption_crop_img:
         try:
             prompt_consumption = _read_consumption_prompt()
             result_consumption = await _infer_one_full(consumption_crop_img, prompt_consumption)
             payload_consumption = _extract_json(result_consumption)
-            if 'consumo_lista' in payload_consumption:
-                payload['consumo_lista'] = payload_consumption['consumo_lista']
+            if payload_consumption and 'consumo_lista' in payload_consumption:
+                consumo_crop = payload_consumption['consumo_lista']
+                if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
+                    payload['consumo_lista'] = consumo_crop
+                    log_main(f"[ocr_anchors] consumo extraído do crop: {len(consumo_crop)} itens")
+                else:
+                    log_main(f"[ocr_anchors] AVISO: consumo_lista vazio no crop")
+            else:
+                log_main(f"[ocr_anchors] AVISO: consumo_lista não encontrado no crop")
         except Exception as e:
             log_main(f"[ocr_anchors] erro ao extrair consumo: {e}")
+    else:
+        log_main(f"[ocr_anchors] AVISO: crop de consumo não disponível (YOLO não detectou)")
     
     # Step 4: Use full image inference for remaining fields
     # Fields that need full context or weren't found via anchors
+    # NOTA: consumo_lista NÃO está aqui - deve vir do YOLO crop acima
     remaining_fields_needed = [
         'vencimento', 'mes_referencia', 'valor_fatura', 'aliquota_icms',
         'cod_cliente', 'num_instalacao', 'classificacao', 'tipo_instalacao', 
@@ -447,6 +458,13 @@ async def extract_energy(
     
     # Check which fields are still missing
     missing_remaining = [f for f in remaining_fields_needed if f not in payload or not payload.get(f)]
+    
+    # Se consumo_lista não foi extraído do crop, tenta do full-image como fallback
+    if not payload.get('consumo_lista'):
+        log_main("[ocr_anchors] consumo_lista não encontrado no crop, tentando full-image como fallback")
+        remaining_fields_needed.append('consumo_lista')
+        if 'consumo_lista' not in missing_remaining:
+            missing_remaining.append('consumo_lista')
     
     if missing_remaining:
         # Resize image if too large (same logic as main.py)
@@ -467,8 +485,35 @@ async def extract_energy(
             
             # Merge remaining fields (don't overwrite existing fields)
             for key in missing_remaining:
-                if key in payload_full and payload_full[key]:
-                    payload[key] = payload_full[key]
+                if key in payload_full:
+                    # Para consumo_lista, mescla inteligentemente (mesma lógica do main.py)
+                    if key == 'consumo_lista':
+                        consumo_crop = payload_consumption.get('consumo_lista', []) if payload_consumption else []
+                        consumo_full = payload_full.get('consumo_lista', [])
+                        
+                        # Mescla: usa crop se tiver mais itens, senão usa full
+                        if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
+                            if not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
+                                payload[key] = consumo_crop
+                            elif len(consumo_crop) > len(consumo_full):
+                                payload[key] = consumo_crop
+                            else:
+                                payload[key] = consumo_full
+                        elif consumo_full:
+                            payload[key] = consumo_full
+                    elif payload_full[key]:  # Para outros campos, só se não vazio
+                        payload[key] = payload_full[key]
+            
+            # Mescla consumo do crop após full-image (mesma lógica do main.py)
+            if payload_consumption and "consumo_lista" in payload_consumption:
+                consumo_crop = payload_consumption["consumo_lista"]
+                consumo_full = payload.get("consumo_lista", [])
+                
+                if isinstance(consumo_crop, list) and len(consumo_crop) > 0:
+                    if not consumo_full or not isinstance(consumo_full, list) or len(consumo_full) == 0:
+                        payload["consumo_lista"] = consumo_crop
+                    elif len(consumo_crop) > len(consumo_full):
+                        payload["consumo_lista"] = consumo_crop
         except Exception as e:
             log_main(f"[ocr_anchors] erro ao extrair campos restantes: {e}")
     
