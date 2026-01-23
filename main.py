@@ -545,6 +545,21 @@ def _ensure_contract(payload: Dict[str, Any], concessionaria_input: str, uf: str
     if concessionaria_key == "equatorial" and uf_key == "go":
         out["conta_contrato"] = None
         log(f"[validation] aplicada regra: conta_contrato = null para {concessionaria_input}/{uf}")
+    
+    # Validação crítica: estado deve corresponder ao UF da requisição
+    estado_extraido = str(out.get("estado", "")).strip().upper()
+    uf_esperado = uf.strip().upper()
+    
+    if estado_extraido and uf_esperado:
+        if estado_extraido != uf_esperado:
+            log(f"[validation] AVISO: estado extraído '{estado_extraido}' não corresponde ao UF '{uf_esperado}'. Corrigindo para '{uf_esperado}'")
+            out["estado"] = uf_esperado
+        else:
+            out["estado"] = estado_extraido
+    elif uf_esperado:
+        # Se não extraiu estado mas temos UF na requisição, usa o UF
+        out["estado"] = uf_esperado
+        log(f"[validation] estado não extraído, usando UF da requisição: {uf_esperado}")
 
     return out
 
@@ -1147,7 +1162,22 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
         for key in ["rua", "numero", "complemento", "bairro", "cidade", "estado", "cep"]:
             customer_value = payload_customer.get(key)
             # Só sobrescreve se o crop tem valor válido (não vazio)
+            # Validação adicional: rejeita valores suspeitos (muito curtos para CEP, estados inválidos, etc.)
             if customer_value and str(customer_value).strip():
+                value_str = str(customer_value).strip()
+                # Validações específicas por campo
+                if key == "cep":
+                    # CEP deve ter 8 dígitos (pode ter formatação, mas deve ter 8 dígitos numéricos)
+                    digits_only = re.sub(r'[^\d]', '', value_str)
+                    if len(digits_only) != 8:
+                        log(f"[validation] CEP inválido ignorado: '{value_str}' (esperado 8 dígitos, encontrado {len(digits_only)})")
+                        continue  # Não sobrescreve com CEP inválido
+                elif key == "estado":
+                    # Estado deve ter exatamente 2 letras maiúsculas
+                    if not re.match(r'^[A-Z]{2}$', value_str):
+                        log(f"[validation] Estado inválido ignorado: '{value_str}' (esperado 2 letras maiúsculas)")
+                        continue  # Não sobrescreve com estado inválido
+                
                 payload[key] = customer_value
     
     # Adiciona consumo_lista se disponível

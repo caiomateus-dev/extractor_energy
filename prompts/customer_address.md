@@ -27,8 +27,16 @@ REGRAS GERAIS:
   - Se aparecer "RESIDENCIAL ABC" → use "RESIDENCIAL ABC" completo
   - ATENÇÃO: Leia TUDO que aparece antes do nome do bairro. Se houver "JARDIM", "VILA", "CONJUNTO", etc., inclua no campo bairro
 - cidade: Nome da cidade que aparece ANTES da sigla do estado na linha do endereço. NÃO use cidade de outras partes da fatura (como cidade da distribuidora ou cidade de outras seções).
-- estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP", "GO") que aparece após o nome da cidade na linha do endereço.
-- cep: CEP do endereço. Procure por "CEP:" seguido de números na linha do endereço. Extraia TODOS os números após "CEP:" (o CEP tem 8 dígitos). NÃO use CEPs de outras partes da fatura.
+- estado: Sigla do estado em 2 letras maiúsculas (ex: "MG", "SP", "GO") que aparece após o nome da cidade na linha do endereço. CRÍTICO: Extraia APENAS o estado que aparece na linha do endereço do cliente. NÃO use estado de outras partes da fatura.
+- cep: CEP do endereço. Procure por "CEP:" seguido de números na linha do endereço. Extraia TODOS os números após "CEP:" (o CEP tem 8 dígitos). NÃO use CEPs de outras partes da fatura. Se aparecer "CEP: 75402700", extraia "75402700" (8 dígitos completos).
+
+REGRA ABSOLUTA - NÃO INVENTE VALORES:
+- Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
+- NÃO invente nomes de rua, números, complementos, bairros, cidades, estados ou CEPs
+- NÃO use valores de outras partes da fatura (como cidade da distribuidora, CEPs de outras seções, etc.)
+- Se a imagem estiver ilegível ou um campo não estiver visível, use "" (string vazia)
+- É MELHOR retornar campos vazios do que inventar valores incorretos
+- NUNCA invente ou adivinhe valores baseado em contexto ou outras informações
 
 IMPORTANTE: 
 - Esta imagem contém APENAS dados do endereço do cliente. NÃO inclua dados da distribuidora.
