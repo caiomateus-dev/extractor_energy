@@ -26,8 +26,12 @@ LOCALIZAÇÃO DOS CAMPOS
 4. tipo_instalacao: Procure próximo a "Grupo e Subgrupo de Tensao:" na seção de dados do cliente.
    - Valores comuns: "B1 / MONO", "B1 / BIF", "B1 / TRI"
    - Saída OBRIGATÓRIA em MAIÚSCULAS e SEM ACENTO: MONOFASICO, BIFASICO ou TRIFASICO
-   - Mapeamento: "MONO" → "MONOFASICO", "BIF" → "BIFASICO", "TRI" → "TRIFASICO"
+   - Mapeamento OBRIGATÓRIO: "MONO" → "MONOFASICO", "BIF" → "BIFASICO", "TRI" → "TRIFASICO"
+   - Se encontrar "B1 / MONO" → extraia "MONOFASICO" (NÃO "B1 / MONO")
+   - Se encontrar "B1 / BIF" → extraia "BIFASICO" (NÃO "B1 / BIF")
+   - Se encontrar "B1 / TRI" → extraia "TRIFASICO" (NÃO "B1 / TRI")
    - NUNCA use "Monofásico", "Bifásico" ou "Trifásico". SEMPRE MAIÚSCULAS e SEM ACENTO.
+   - NUNCA retorne o formato original "B1 / MONO" - sempre converta para "MONOFASICO"
 
 5. mes_referencia: Procure em uma CAIXA AMARELA no lado esquerdo, próximo a "Conta mês".
    - Valores comuns: "7/2025", "12/2025"
