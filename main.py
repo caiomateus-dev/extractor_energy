@@ -321,56 +321,14 @@ def _load_image(raw: bytes) -> Image.Image:
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
-    """Extrai JSON do texto, removendo mensagens de deprecação e outros textos extras"""
     text = text.strip()
-    
-    # Remove linhas com mensagens de deprecação ou avisos
-    lines = text.split('\n')
-    filtered_lines = []
-    skip_until_json = False
-    for line in lines:
-        line_lower = line.lower()
-        # Pula linhas de deprecação, avisos, ou separadores
-        if any(x in line_lower for x in ['deprecated', 'calling', 'python -m', '==========', 'files:', 'prompt:']):
-            skip_until_json = True
-            continue
-        # Se encontrou uma chave JSON, para de pular
-        if '{' in line or '[' in line:
-            skip_until_json = False
-        if not skip_until_json:
-            filtered_lines.append(line)
-    
-    text = '\n'.join(filtered_lines).strip()
-    
-    # Tenta encontrar JSON válido
-    # Primeiro tenta objeto JSON completo
     if text.startswith("{") and text.endswith("}"):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-    
-    # Procura por objeto JSON no texto
-    m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            pass
-    
-    # Procura por qualquer JSON válido (mais permissivo)
-    m = re.search(r'\{.*\}', text, re.DOTALL)
-    if m:
-        json_str = m.group(0)
-        # Tenta limpar vírgulas finais e outros problemas comuns
-        json_str = re.sub(r',\s*}', '}', json_str)
-        json_str = re.sub(r',\s*]', ']', json_str)
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Nenhum JSON válido encontrado na resposta. Erro: {e}. Texto: {text[:500]}")
-    
-    raise ValueError(f"Nenhum JSON encontrado na resposta do modelo. Texto: {text[:500]}")
+        return json.loads(text)
+
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        raise ValueError("Nenhum JSON encontrado na resposta do modelo.")
+    return json.loads(m.group(0))
 
 
 def _to_float(x: Any, default: float) -> float:
@@ -619,32 +577,14 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
 
     # Salva imagem temporariamente para subprocess
     temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-    temp_prompt_file = None
     try:
         # Converte para RGB se necessário
         if img.mode != 'RGB':
             img = img.convert('RGB')
         img.save(temp_img.name, format='JPEG', quality=95)
         temp_img_path = temp_img.name
-        
-        # Para prompts longos, salva em arquivo temporário para evitar problemas com shell
-        # O CLI pode ter limitações de tamanho de argumento
-        if len(prompt_text) > 8000:  # Limite conservador para argumentos de shell
-            temp_prompt_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8')
-            temp_prompt_file.write(prompt_text)
-            temp_prompt_file.close()
-            temp_prompt_path = temp_prompt_file.name
-            use_prompt_file = True
-        else:
-            temp_prompt_path = None
-            use_prompt_file = False
-    except Exception as e:
-        if temp_img:
-            try:
-                os.unlink(temp_img.name)
-            except:
-                pass
-        raise
+    finally:
+        temp_img.close()
 
     loop = asyncio.get_running_loop()
 
@@ -652,30 +592,14 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
         try:
             # Usa subprocess para chamar mlx_vlm.generate como processo separado
             # Isso permite paralelismo real - cada chamada é um processo independente
-            # Usa python -m mlx_vlm.generate conforme documentação
-            # O CLI formata o prompt automaticamente, então passamos o prompt bruto
             cmd = [
                 sys.executable, "-m", "mlx_vlm.generate",
                 "--model", settings.model_id,
                 "--max-tokens", str(settings.max_tokens),
                 "--temperature", str(settings.temperature),
+                "--prompt", prompt_text,
+                "--image", temp_img_path,
             ]
-            
-            # Adiciona prompt: direto ou via arquivo
-            if use_prompt_file:
-                # Lê o prompt do arquivo e passa como argumento (alguns CLIs suportam @file)
-                # Mas mlx_vlm.generate não suporta @file, então vamos passar direto mesmo
-                # Se o arquivo for muito grande, pode ser necessário outra abordagem
-                with open(temp_prompt_path, 'r', encoding='utf-8') as f:
-                    prompt_content = f.read()
-                cmd.extend(["--prompt", prompt_content])
-            else:
-                cmd.extend(["--prompt", prompt_text])
-            
-            cmd.extend(["--image", temp_img_path])
-            
-            log(f"[infer] comando: {' '.join(cmd[:6])} ... --prompt [{len(prompt_text)} chars] --image {temp_img_path}")
-            log(f"[infer] prompt (primeiros 300 chars): {prompt_text[:300]}")
             
             result = subprocess.run(
                 cmd,
@@ -685,184 +609,18 @@ async def _infer_one(img: Image.Image, prompt_text: str) -> str:
             )
             
             if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "Erro desconhecido no subprocesso"
-                log(f"[infer] erro no subprocesso (code {result.returncode}): {error_msg[:500]}")
-                raise RuntimeError(f"Falha no processamento: {error_msg[:200]}")
+                error_msg = result.stderr or "Erro desconhecido no subprocesso"
+                log(f"[infer] erro no subprocesso: {error_msg}")
+                raise RuntimeError(f"Falha no processamento: {error_msg}")
             
-            output = result.stdout.strip()
-            log(f"[infer] output bruto (tamanho: {len(output)} chars, primeiros 1000 chars): {output[:1000]}")
-            log(f"[infer] output bruto (últimos 1000 chars): {output[-1000:]}")
-            
-            def _find_balanced_json(text: str, start_char: str = '{') -> str | None:
-                """Encontra JSON completo com chaves/colchetes balanceados"""
-                if start_char == '{':
-                    end_char = '}'
-                    open_char, close_char = '{', '}'
-                else:
-                    end_char = ']'
-                    open_char, close_char = '[', ']'
-                
-                start_pos = text.find(start_char)
-                if start_pos == -1:
-                    return None
-                
-                depth = 0
-                in_string = False
-                escape_next = False
-                
-                for i in range(start_pos, len(text)):
-                    char = text[i]
-                    
-                    if escape_next:
-                        escape_next = False
-                        continue
-                    
-                    if char == '\\':
-                        escape_next = True
-                        continue
-                    
-                    if char == '"' and not escape_next:
-                        in_string = not in_string
-                        continue
-                    
-                    if in_string:
-                        continue
-                    
-                    if char == open_char:
-                        depth += 1
-                    elif char == close_char:
-                        depth -= 1
-                        if depth == 0:
-                            return text[start_pos:i+1]
-                
-                return None
-            
-            # A resposta real do modelo vem após <|im_start|>assistant
-            # Procura por esse marcador e pega tudo depois
-            assistant_marker = '<|im_start|>assistant'
-            assistant_pos = output.find(assistant_marker)
-            
-            if assistant_pos >= 0:
-                # Pega tudo após o marcador assistant
-                response_section = output[assistant_pos + len(assistant_marker):].strip()
-                
-                # Remove tokens de formatação restantes
-                response_section = re.sub(r'<\|[^|]+\|>', '', response_section).strip()
-                
-                log(f"[infer] seção resposta após assistant (tamanho: {len(response_section)} chars, primeiros 500 chars): {response_section[:500]}")
-                
-                # Remove delimitadores markdown primeiro (se houver)
-                # Isso ajuda a encontrar o JSON real
-                cleaned_section = re.sub(r'```json\s*', '', response_section)
-                cleaned_section = re.sub(r'\s*```', '', cleaned_section)
-                cleaned_section = cleaned_section.strip()
-                
-                # Tenta encontrar JSON completo com chaves balanceadas
-                json_start = cleaned_section.find('{')
-                if json_start != -1:
-                    log(f"[infer] encontrado {{ na posição {json_start}, tentando extrair JSON balanceado...")
-                    balanced_json = _find_balanced_json(cleaned_section[json_start:], '{')
-                    if balanced_json:
-                        # Valida se o JSON é válido tentando fazer parse
-                        try:
-                            json.loads(balanced_json)
-                            filtered_output = balanced_json
-                            log(f"[infer] JSON balanceado válido encontrado (tamanho: {len(balanced_json)} chars)")
-                        except json.JSONDecodeError as e:
-                            log(f"[infer] AVISO: JSON balanceado não é válido: {e}. Tentando fallback...")
-                            # Fallback: tenta encontrar JSON válido de outra forma
-                            # Procura pelo último } que fecha o objeto principal
-                            last_brace = cleaned_section.rfind('}')
-                            if last_brace > json_start:
-                                potential_json = cleaned_section[json_start:last_brace+1]
-                                try:
-                                    json.loads(potential_json)
-                                    filtered_output = potential_json
-                                    log(f"[infer] JSON válido encontrado via fallback (tamanho: {len(potential_json)} chars)")
-                                except json.JSONDecodeError:
-                                    filtered_output = balanced_json  # Usa o que encontrou mesmo assim
-                            else:
-                                filtered_output = balanced_json
-                    else:
-                        log(f"[infer] AVISO: _find_balanced_json retornou None. Tentando fallback...")
-                        # Fallback: procura pelo último } que fecha o objeto
-                        last_brace = cleaned_section.rfind('}')
-                        if last_brace > json_start:
-                            potential_json = cleaned_section[json_start:last_brace+1]
-                            try:
-                                json.loads(potential_json)
-                                filtered_output = potential_json
-                                log(f"[infer] JSON válido encontrado via fallback rfind (tamanho: {len(potential_json)} chars)")
-                            except json.JSONDecodeError:
-                                # Último recurso: tenta lista JSON
-                                list_start = cleaned_section.find('[')
-                                if list_start != -1:
-                                    balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
-                                    if balanced_list:
-                                        filtered_output = balanced_list
-                                    else:
-                                        filtered_output = cleaned_section
-                                else:
-                                    filtered_output = cleaned_section
-                        else:
-                            filtered_output = cleaned_section
-                else:
-                    # Tenta lista JSON se não encontrou objeto
-                    list_start = cleaned_section.find('[')
-                    if list_start != -1:
-                        balanced_list = _find_balanced_json(cleaned_section[list_start:], '[')
-                        if balanced_list:
-                            filtered_output = balanced_list
-                        else:
-                            filtered_output = cleaned_section
-                    else:
-                        filtered_output = cleaned_section
-                
-                filtered_output = filtered_output.strip()
-                
-                # Substitui vírgula por ponto em números (formato brasileiro)
-                filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
-            else:
-                # Fallback: procura pelo último JSON válido no output (não o primeiro/exemplo)
-                # Encontra todas as posições de '{' e tenta extrair JSON completo de cada uma
-                json_candidates = []
-                pos = 0
-                while True:
-                    pos = output.find('{', pos)
-                    if pos == -1:
-                        break
-                    balanced_json = _find_balanced_json(output[pos:], '{')
-                    if balanced_json:
-                        json_candidates.append((pos, balanced_json))
-                    pos += 1
-                
-                if json_candidates:
-                    # Pega o último JSON encontrado (deve ser a resposta do modelo)
-                    _, filtered_output = json_candidates[-1]
-                    # Remove delimitadores markdown se houver
-                    filtered_output = re.sub(r'^```json\s*', '', filtered_output, flags=re.MULTILINE)
-                    filtered_output = re.sub(r'\s*```$', '', filtered_output, flags=re.MULTILINE)
-                    filtered_output = filtered_output.strip()
-                    # Substitui vírgula por ponto em números
-                    filtered_output = re.sub(r'(?<=\d),(?=\d)', '.', filtered_output)
-                else:
-                    # Último recurso: retorna o output completo
-                    filtered_output = output
-            
-            log(f"[infer] output filtrado (tamanho: {len(filtered_output)} chars, primeiros 500 chars): {filtered_output[:500]}")
-            return filtered_output
+            return result.stdout.strip()
         finally:
-            # Remove arquivos temporários
+            # Remove arquivo temporário
             try:
                 if os.path.exists(temp_img_path):
                     os.unlink(temp_img_path)
             except Exception:
                 pass
-            if temp_prompt_file and os.path.exists(temp_prompt_path):
-                try:
-                    os.unlink(temp_prompt_path)
-                except Exception:
-                    pass
             # Limpa cache e força garbage collection
             _clear_metal_cache()
             gc.collect()
@@ -985,78 +743,78 @@ Agora analise a imagem e retorne o JSON com os dados extraídos:"""
     result_customer = None
     result_consumption = None
     
-    # Sem _GATE - cada subprocess é independente e pode rodar em paralelo
-    # Inferência 1: Imagem completa (dados gerais)
     try:
-        t_infer1_start = time.time()
-        log("[infer] iniciando inferência imagem completa")
-        result_full = await _infer_one(img, prompt_full)
-        t_infer1_end = time.time()
-        log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
-    except Exception as e:
-        log(f"[infer] erro na inferência imagem completa: {e}")
-        result_full = None
-    
-    # Inferência 2: Recorte cliente/endereço
-    if customer_crop_img is not None:
+        # Inferência 1: Imagem completa (dados gerais)
         try:
-            t_infer2_start = time.time()
-            log("[infer] iniciando inferência recorte cliente/endereço")
-            prompt_customer = _read_customer_address_prompt(concessionaria, uf)
-            result_customer = await _infer_one(customer_crop_img, prompt_customer)
-            t_infer2_end = time.time()
-            log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
+            t_infer1_start = time.time()
+            log("[infer] iniciando inferência imagem completa")
+            result_full = await _infer_one(img, prompt_full)
+            t_infer1_end = time.time()
+            log(f"[timing] inferência completa: {(t_infer1_end - t_infer1_start)*1000:.1f}ms")
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="timeout na inferência do modelo (imagem completa)")
         except Exception as e:
-            log(f"[infer] erro na inferência cliente/endereço: {e}")
+            log(f"[infer] erro na inferência imagem completa: {e}")
+            result_full = None
+        
+        # Inferência 2: Recorte cliente/endereço
+        if customer_crop_img is not None:
+            try:
+                t_infer2_start = time.time()
+                log("[infer] iniciando inferência recorte cliente/endereço")
+                prompt_customer = _read_customer_address_prompt(concessionaria, uf)
+                result_customer = await _infer_one(customer_crop_img, prompt_customer)
+                t_infer2_end = time.time()
+                log(f"[timing] inferência cliente: {(t_infer2_end - t_infer2_start)*1000:.1f}ms")
+            except Exception as e:
+                log(f"[infer] erro na inferência cliente/endereço: {e}")
+                result_customer = None
+        else:
             result_customer = None
-    else:
-        result_customer = None
-    
-    # Inferência 3: Recorte consumo
-    if consumption_crop_img is not None:
-        try:
-            t_infer3_start = time.time()
-            log("[infer] iniciando inferência recorte consumo")
-            prompt_consumption = _read_consumption_prompt()
-            result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
-            t_infer3_end = time.time()
-            log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
-        except Exception as e:
-            log(f"[infer] erro na inferência consumo: {e}")
+        
+        # Inferência 3: Recorte consumo
+        if consumption_crop_img is not None:
+            try:
+                t_infer3_start = time.time()
+                log("[infer] iniciando inferência recorte consumo")
+                prompt_consumption = _read_consumption_prompt()
+                result_consumption = await _infer_one(consumption_crop_img, prompt_consumption)
+                t_infer3_end = time.time()
+                log(f"[timing] inferência consumo: {(t_infer3_end - t_infer3_start)*1000:.1f}ms")
+            except Exception as e:
+                log(f"[infer] erro na inferência consumo: {e}")
+                result_consumption = None
+        else:
             result_consumption = None
-    else:
-        result_consumption = None
-    
-    # Limpa imagens da memória (fora do _GATE para não bloquear outras requisições)
-    if img is not None:
-        img.close()
-        del img
-    if customer_crop_img is not None:
-        customer_crop_img.close()
-        del customer_crop_img
-    if consumption_crop_img is not None:
-        consumption_crop_img.close()
-        del consumption_crop_img
-    
-    # Remove arquivos temporários
-    if img_temp_path and os.path.exists(img_temp_path):
-        try:
-            os.unlink(img_temp_path)
-        except Exception:
-            pass
-    
-    # Limpa arquivos temporários do ObjectDetection
-    if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
-        try:
-            OBJECT_DETECTOR.cleanup_temp_files()
-        except Exception:
-            pass
-    
-    # Limpa cache do Metal e força garbage collection
-    _clear_metal_cache()
-    gc.collect()
+    finally:
+        # Limpa imagens da memória
+        if img is not None:
+            img.close()
+            del img
+        if customer_crop_img is not None:
+            customer_crop_img.close()
+            del customer_crop_img
+        if consumption_crop_img is not None:
+            consumption_crop_img.close()
+            del consumption_crop_img
+        
+        # Remove arquivos temporários
+        if img_temp_path and os.path.exists(img_temp_path):
+            try:
+                os.unlink(img_temp_path)
+            except Exception:
+                pass
+        
+        # Limpa arquivos temporários do ObjectDetection
+        if _HAS_OBJECT_DETECTION and OBJECT_DETECTOR is not None:
+            try:
+                OBJECT_DETECTOR.cleanup_temp_files()
+            except Exception:
+                pass
+        
+        # Limpa cache do Metal e força garbage collection
+        _clear_metal_cache()
+        gc.collect()
 
     # Processa resultados e combina
     payload_full = {}

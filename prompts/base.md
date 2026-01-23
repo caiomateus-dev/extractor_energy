@@ -53,6 +53,7 @@ REGRAS IMPORTANTES:
    - vencimento e proximo_leitura: formato "DD/MM/AAAA" (ex: "15/01/2024")
 7. Se houver débitos anteriores (meses anteriores ao mes_referencia): faturas_venc = true e preencha valores_em_aberto APENAS com esses débitos anteriores
 8. Se não houver débitos anteriores ou se a seção estiver vazia: faturas_venc = false e valores_em_aberto = []
-9. nome_cliente: Nome completo do cliente conforme aparece na fatura. Procure próximo a "Cliente", "Nome" ou na área de identificação do cliente.
+9. nome_cliente: Nome completo do cliente conforme aparece na fatura. O nome do cliente é a PRIMEIRA LINHA da seção de identificação do cliente na fatura. Procure próximo a "Cliente", "Nome" ou na área de identificação do cliente.
+   CRÍTICO: Extraia APENAS o nome do cliente (pessoa física ou jurídica). NÃO inclua cidade, estado, CEP, bairro ou qualquer informação de endereço/localização geográfica neste campo. O campo nome_cliente deve conter somente o nome da pessoa ou empresa, que geralmente é a primeira linha da seção de dados do cliente.
 
 LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. Não invente valores. Se não encontrar, use os valores padrão acima.
