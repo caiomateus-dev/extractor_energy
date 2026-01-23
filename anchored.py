@@ -341,6 +341,7 @@ async def extract_energy(
     concessionaria: str = Form(...),
     uf: str = Form(...),
     file: UploadFile = File(...),
+    use_ocr_anchors: bool = Form(False),  # Desabilitado por padrão - muito lento
 ):
     """Extract energy bill data using OCR-anchored pipeline"""
     t_request_start = time.time()
@@ -368,35 +369,36 @@ async def extract_energy(
     # Initialize result payload
     payload = {}
     
-    # Fields to extract via OCR anchors
-    anchor_fields = [
-        'vencimento',
-        'mes_referencia',
-        'valor_fatura',
-        'aliquota_icms',
-        'cod_cliente',
-        'num_instalacao',
-    ]
-    
-    # Step 1: Extract fields via OCR anchors
-    t_anchors_start = time.time()
-    anchor_results = await extract_fields_via_anchors(img, anchor_fields)
-    t_anchors_end = time.time()
-    anchor_time_ms = (t_anchors_end - t_anchors_start) * 1000
-    log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
-    payload.update(anchor_results)
-    
-    # Step 2: Fallback for missing fields via tiling (só se realmente faltar e não muitos)
-    missing_fields = [f for f in anchor_fields if not payload.get(f)]
-    if missing_fields and len(missing_fields) <= 2:  # Só usa tiling se faltar 2 ou menos campos
-        log_main(f"[ocr_anchors] usando tiling para {len(missing_fields)} campos faltantes: {missing_fields}")
-        t_tiling_start = time.time()
-        tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
-        t_tiling_end = time.time()
-        log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
-        payload.update(tiling_results)
-    elif missing_fields:
-        log_main(f"[ocr_anchors] muitos campos faltantes ({len(missing_fields)}), pulando tiling (muito lento)")
+    # OCR-ANCHORED PIPELINE DESABILITADO POR PADRÃO - muito lento (47s+)
+    # Use apenas para testes/debug. Pipeline original (YOLO + full-image) é mais rápido
+    if use_ocr_anchors:
+        log_main("[ocr_anchors] AVISO: Pipeline OCR-anchored habilitado (lento!)")
+        anchor_fields = [
+            'vencimento',
+            'mes_referencia',
+            'valor_fatura',
+            'aliquota_icms',
+            'cod_cliente',
+            'num_instalacao',
+        ]
+        
+        t_anchors_start = time.time()
+        anchor_results = await extract_fields_via_anchors(img, anchor_fields)
+        t_anchors_end = time.time()
+        anchor_time_ms = (t_anchors_end - t_anchors_start) * 1000
+        log_main(f"[ocr_anchors] extração via âncoras: {anchor_time_ms:.1f}ms")
+        payload.update(anchor_results)
+        
+        missing_fields = [f for f in anchor_fields if not payload.get(f)]
+        if missing_fields and len(missing_fields) <= 2:
+            log_main(f"[ocr_anchors] usando tiling para {len(missing_fields)} campos faltantes")
+            t_tiling_start = time.time()
+            tiling_results = await extract_fields_via_tiling_fallback(img, missing_fields)
+            t_tiling_end = time.time()
+            log_main(f"[ocr_anchors] fallback tiling: {(t_tiling_end - t_tiling_start)*1000:.1f}ms")
+            payload.update(tiling_results)
+    else:
+        log_main("[ocr_anchors] Pipeline OCR-anchored desabilitado (usando YOLO + full-image)")
     
     # Step 3: Use YOLO for customer address and consumption (keep existing logic)
     customer_crop_img = None
