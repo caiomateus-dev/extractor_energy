@@ -6,7 +6,7 @@ Não invente dados que não estejam presentes.
 Quando um campo não existir, retorne null.
 
 Regras importantes:
-
+- O CEP está na mesma linha da UF e Cidade, não é o primeiro numeor que encontrar
 - CEP brasileiro válido tem exatamente 8 dígitos e pode aparecer como "NNNNN-NNN" ou "NNNNNNNN".
 - O CEP quase sempre aparece junto do rótulo "CEP" ou no formato com hífen "NNNNN-NNN".
 - Prioridade máxima: se existir qualquer padrão "NNNNN-NNN" visível, esse é o CEP (remova o hífen e retorne 8 dígitos).
