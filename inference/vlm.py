@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import gc
-import os
 import re
 from pathlib import Path
 
@@ -43,7 +41,7 @@ async def infer_one(
         raise ValueError(
             f"Imagem grande: {w}x{h} ({px:,} px). Máx: {settings.max_pixels:,}."
         )
-    log(f"[infer] pid={os.getpid()} img {w}x{h} ({px:,} px)")
+    log(f"[infer] img {w}x{h} ({px:,} px)")
     if adapter_path and adapter_path.exists():
         log(f"[infer] adapter {adapter_path} ignorado (in-process usa base).")
     if img.mode != "RGB":
@@ -63,6 +61,8 @@ async def infer_one(
                 max_tokens=settings.max_tokens,
                 temperature=settings.temperature,
                 verbose=False,
+                kv_bits=4,
+                quantized_kv_start=0,
             )
             raw = getattr(res, "text", res)
             if not isinstance(raw, str):
@@ -72,7 +72,6 @@ async def infer_one(
             return out
         finally:
             clear_metal_cache()
-            gc.collect()
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _run)
