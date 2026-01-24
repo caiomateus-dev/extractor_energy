@@ -126,6 +126,16 @@ async def extract_energy(
             consumption_crop_img.save(_p)
             log(f"[debug] crop salvo: {_p}")
 
+    # Zoom 3x nos crops antes da inferência (melhora leitura do modelo)
+    if customer_crop_img is not None:
+        w, h = customer_crop_img.size
+        customer_crop_img = customer_crop_img.resize((w * 3, h * 3), Image.LANCZOS)
+        log(f"[crop] cliente zoom 3x: {w}x{h} -> {w * 3}x{h * 3}")
+    if consumption_crop_img is not None:
+        w, h = consumption_crop_img.size
+        consumption_crop_img = consumption_crop_img.resize((w * 3, h * 3), Image.LANCZOS)
+        log(f"[crop] consumo zoom 3x: {w}x{h} -> {w * 3}x{h * 3}")
+
     t_infer = time.time()
     result_customer = None
     result_consumption = None
