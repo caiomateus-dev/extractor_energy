@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class Settings(BaseModel):
-    model_id: str = "mlx-community/Qwen2.5-VL-3B-Instruct-3bit"
+    model_id: str = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
 
     # Valores conservadores para evitar alocações gigantes no Metal (limite de buffer).
     # Aumentado para garantir que o JSON completo seja gerado (13 meses = ~600 tokens mínimo)
