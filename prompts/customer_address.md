@@ -63,6 +63,27 @@ Se você colocou o mesmo valor em bairro e cidade: você repetiu um. Olhe de nov
 Exceção: se na imagem existir apenas UM nome entre complemento e estado, use esse nome em cidade e bairro="".
 
 ==========================
+LAYOUT EM LINHAS (FATURAS CEMIG etc.)
+==========================
+
+Em várias faturas o endereço vem em 2 ou 3 LINHAS:
+- Linha 1: Rua, número, complemento (ex.: RUA RIO DE JANEIRO 122 CS)
+- Linha 2: BAIRRO (ex.: ANTONIO SECRETARIO, Centro, Jardim X)
+- Linha 3: CIDADE-ESTADO ou CEP + CIDADE-ESTADO (ex.: VAZANTE-MG)
+
+O que está na LINHA ENTRE a rua e a linha "CIDADE-ESTADO" é o BAIRRO, 
+"Vila tal" – no contexto do endereço, isso é bairro. Extraia em "bairro".
+A CIDADE é o nome antes do hífen ou da sigla (MG, SP). Ex.: "VAZANTE-MG" → cidade="Vazante", estado="MG".
+
+NUNCA use o nome da cidade como bairro. Se a linha 2 existe e tem texto (ex.: ANTONIO SECRETARIO), esse texto é o bairro.
+
+Exemplo real:
+  RUA RIO DE JANEIRO 122 CS
+  ANTONIO SECRETARIO
+  VAZANTE-MG
+→ bairro = "ANTONIO SECRETARIO", cidade = "Vazante", estado = "MG". NUNCA bairro = "Vazante".
+
+==========================
 EXTRAÇÃO PASSO A PASSO
 ==========================
 
@@ -91,12 +112,13 @@ EXTRAÇÃO PASSO A PASSO
    - Se não houver complemento, use "" (string vazia)
 
 4. bairro: 
-   - Nome que aparece DEPOIS do complemento e ANTES do CEP ou da cidade na linha do endereço (primeira posição).
-   - Extraia exatamente como está. Inclua prefixos (PARQUE, JARDIM, VILA) se aparecerem.
-   - NÃO começa com "RUA" ou "AVENIDA". NUNCA use o mesmo valor que cidade.
+   - Nome que aparece DEPOIS do complemento e ANTES da linha "CIDADE-ESTADO" (ou CEP/cidade). Primeira posição.
+   - Se o endereço está em linhas: a linha ENTRE rua e "CIDADE-ESTADO" é o bairro (ex.: ANTONIO SECRETARIO). Extraia esse texto.
+   - Bairros podem ter nomes como "Antonio Secretario", "Centro", "Jardim X". NUNCA use o nome da cidade como bairro.
+   - Extraia exatamente como está. NÃO começa com "RUA" ou "AVENIDA".
 
 5. cidade: 
-   - Nome que aparece IMEDIATAMENTE ANTES da sigla do estado (MG, SP, etc.) na linha do endereço (segunda posição).
+   - Nome IMEDIATAMENTE ANTES da sigla do estado (MG, SP) ou antes do hífen em "CIDADE-ESTADO" (ex.: VAZANTE-MG → "Vazante"). Segunda posição.
    - Extraia exatamente como está. APENAS da linha do endereço do cliente.
    - NUNCA use o mesmo valor que bairro.
 
@@ -147,8 +169,9 @@ ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
    - Se você não incluiu "Q." ou "L." no complemento mas eles aparecem no endereço → ERRO GRAVE
 
 2. bairro e cidade: Dois campos, duas posições, dois valores
+   - Em layout em linhas: linha entre rua e "CIDADE-ESTADO" = bairro; nome antes de MG/SP = cidade.
    - Primeiro nome (após complemento, antes CEP/cidade) = bairro. Segundo (antes do estado) = cidade.
-   - Se bairro == cidade → ERRO. Você repetiu um. Extraia o correto de cada posição.
+   - Se bairro == cidade → ERRO. Você repetiu um. Nunca use o nome da cidade como bairro.
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
