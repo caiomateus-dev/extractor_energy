@@ -17,7 +17,11 @@ Formato do JSON esperado:
 REGRA ABSOLUTA - CAMPO CEP
 ==========================
 
-O campo "cep" aparece sempre com 8 números. XXXXX-XXX ou XX.XXX-XXX ou XXXXXXXX
+O campo "cep" aparece sempre com 8 números. Formatos: XXXXX-XXX, XX.XXX-XXX ou XXXXXXXX.
+
+NUNCA use "99999", "00000", "12345678" ou qualquer CEP inventado ou genérico.
+Se você NÃO enxergar na imagem um CEP com exatamente 8 dígitos, use "" (string vazia).
+CEP inválido ou inventado é pior que cep vazio.
 
 ==========================
 REGRA ABSOLUTA - CAMPO RUA
@@ -74,7 +78,7 @@ LAYOUT EM LINHAS (FATURAS CEMIG etc.)
 
 Em várias faturas o endereço vem em 2 ou 3 LINHAS:
 - Linha 1: Rua, número, complemento (ex.: RUA RIO DE JANEIRO 122 CS)
-- Linha 2: BAIRRO (ex.: ANTONIO SECRETARIO, Centro, Jardim X)
+- Linha 2: BAIRRO (ex.: ANTONIO SECRETARIO, Centro, Jardim X, Área Rural)
 - Linha 3: CIDADE-ESTADO ou CEP + CIDADE-ESTADO (ex.: VAZANTE-MG)
 
 O que está na LINHA ENTRE a rua e a linha "CIDADE-ESTADO" é o BAIRRO, 
@@ -95,7 +99,7 @@ EXTRAÇÃO PASSO A PASSO
 
 1. rua: 
    - Procure no INÍCIO do endereço por uma palavra que começa com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA"
-   - "RUA SEM NOME" é valido
+   - Use "RUA SEM NOME" APENAS se a fatura disser explicitamente "Sem Nome" ou "S/N" para a via. NUNCA use como padrão ou se não tiver certeza.
    - Extraia essa palavra e tudo até a primeira vírgula
    - Se não encontrar uma palavra começando com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA" no início, você está ERRADO
    - NÃO inclua Quadra (Q.), Lote (L.), número, apartamento, bairro, cidade no campo rua
@@ -120,7 +124,7 @@ EXTRAÇÃO PASSO A PASSO
 4. bairro: 
    - Nome que aparece DEPOIS do complemento e ANTES da linha "CIDADE-ESTADO" (ou CEP/cidade). Primeira posição.
    - Se o endereço está em linhas: a linha ENTRE rua e "CIDADE-ESTADO" é o bairro (ex.: ANTONIO SECRETARIO). Extraia esse texto.
-   - Bairros podem ter nomes como "Antonio Secretario", "Centro", "Jardim X". NUNCA use o nome da cidade como bairro.
+   - Bairros podem ter nomes como "Antonio Secretario", "Centro", "Jardim X", "Área Rural". "Área Rural" ou "Area Rural" é bairro válido. NUNCA use o nome da cidade como bairro.
    - Extraia exatamente como está. NÃO começa com "RUA" ou "AVENIDA".
 
 5. cidade: 
@@ -134,9 +138,10 @@ EXTRAÇÃO PASSO A PASSO
    - Extraia APENAS da linha do endereço do cliente
 
 7. cep: 
-   - Números após "CEP:" na linha do endereço
-   - Extraia apenas os 8 dígitos (sem formatação)
-   - NÃO use CEPs de outras partes da fatura
+   - Números após "CEP:" ou "CEP" na linha do endereço. Extraia apenas os 8 dígitos (pode manter formatação XX.XXX-XXX ou XXXXX-XXX).
+   - Se NÃO enxergar 8 dígitos na imagem, use "".
+   - NUNCA use 99999, 00000, 12345678 ou similares. NÃO invente CEP.
+   - NÃO use CEPs de outras partes da fatura.
 
 ==========================
 VALIDAÇÃO OBRIGATÓRIA
@@ -163,7 +168,8 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
 4. bairro: Primeiro nome entre complemento e estado (antes do CEP/cidade). bairro != cidade.
 5. cidade: Segundo nome, o que vem logo antes da sigla (MG, SP). cidade != bairro.
 
-6. estado, cep: APENAS da linha do endereço do cliente
+6. estado: APENAS da linha do endereço do cliente.
+7. cep: Exatamente 8 dígitos lidos na imagem, ou "". NUNCA 99999, 00000 ou inventados.
 
 ==========================
 VALIDAÇÃO FINAL OBRIGATÓRIA
@@ -182,6 +188,8 @@ ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
 - NÃO invente nomes de rua, números, complementos, bairros, cidades, estados ou CEPs
+- NUNCA use CEP 99999, 00000, 12345678 ou qualquer CEP genérico. CEP só com 8 dígitos lidos na imagem; senão "".
+- NÃO use "RUA SEM NOME" nem "CARAI" (ou parecidos) a menos que estejam escritos no documento
 - NÃO use valores de outras partes da fatura
 - É MELHOR retornar campos vazios do que inventar valores incorretos
 
