@@ -34,9 +34,19 @@ SE O PRIMEIRO TEXTO DO ENDEREÇO NÃO COMEÇAR COM UMA DESSAS PALAVRAS, VOCÊ ES
 PROCURE NO INÍCIO DO ENDEREÇO por uma palavra que começa com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA".
 
 NUNCA coloque no campo "rua":
-- Nome de bairro
-- Nome de cidade  
+- Nome de bairro (Centro, Área Rural, córrego, loteamento, etc.)
+- Nome de cidade
 - Qualquer texto que NÃO começa com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA"
+
+Rua = via. Bairro e cidade vão nos seus campos. Rua SEMPRE começa com RUA/AVENIDA/ESTRADA/RODOVIA.
+
+==========================
+REGRA ABSOLUTA - CAMPO NÚMERO
+==========================
+
+NUNCA use "99999", "00000" ou número inventado no campo "numero".
+Se não houver número na imagem → use "S/N". Se houver número → extraia o valor real.
+Numero inventado é ERRO GRAVE.
 
 ==========================
 ORDEM DOS CAMPOS NO ENDEREÇO
@@ -64,34 +74,27 @@ Na linha do endereço, a ORDEM é: ... complemento → BAIRRO → CEP (se houver
 
 São dois campos em posições diferentes. Extraia o valor correto de cada posição.
 
-Exemplo: "..., Centro, 30100-000, Belo Horizonte, MG"
-  → bairro = "Centro" (entre complemento e CEP)
-  → cidade = "Belo Horizonte" (antes de MG)
+Exemplo genérico: "..., [bairro], [CEP], [cidade], [UF]"
+  → bairro = o nome entre complemento e CEP/cidade
+  → cidade = o nome imediatamente antes da sigla do estado
 
-Se você colocou o mesmo valor em bairro e cidade: você repetiu um. Olhe de novo a ordem na imagem, identifique o primeiro nome (bairro) e o segundo (cidade), e extraia cada um corretamente.
+Se você colocou o mesmo valor em bairro e cidade: você repetiu um. São dois campos distintos. Identifique a posição de cada um na imagem.
 
 Exceção: se na imagem existir apenas UM nome entre complemento e estado, use esse nome em cidade e bairro="".
 
 ==========================
-LAYOUT EM LINHAS (FATURAS CEMIG etc.)
+LAYOUT EM LINHAS
 ==========================
 
-Em várias faturas o endereço vem em 2 ou 3 LINHAS:
-- Linha 1: Rua, número, complemento (ex.: RUA RIO DE JANEIRO 122 CS)
-- Linha 2: BAIRRO (ex.: ANTONIO SECRETARIO, Centro, Jardim X, Área Rural)
-- Linha 3: CIDADE-ESTADO ou CEP + CIDADE-ESTADO (ex.: VAZANTE-MG)
+Em muitas faturas o endereço vem em 2 ou 3 linhas:
+- Linha 1: Rua, número, complemento (sempre começa com RUA/AVENIDA/ESTRADA/RODOVIA)
+- Linha 2 (se existir): BAIRRO – nome do bairro, loteamento, Área Rural, etc.
+- Linha 3: CIDADE-ESTADO ou CEP + CIDADE-ESTADO
 
-O que está na LINHA ENTRE a rua e a linha "CIDADE-ESTADO" é o BAIRRO, 
-"Vila tal" – no contexto do endereço, isso é bairro. Extraia em "bairro".
-A CIDADE é o nome antes do hífen ou da sigla (MG, SP). Ex.: "VAZANTE-MG" → cidade="Vazante", estado="MG".
+O que está na LINHA ENTRE a rua e a linha "CIDADE-ESTADO" (ou "cidade-UF") é o BAIRRO.
+A CIDADE é o nome imediatamente antes do hífen ou da sigla do estado (MG, SP, etc.).
 
-NUNCA use o nome da cidade como bairro. Se a linha 2 existe e tem texto (ex.: ANTONIO SECRETARIO), esse texto é o bairro.
-
-Exemplo real:
-  RUA RIO DE JANEIRO 122 CS
-  ANTONIO SECRETARIO
-  VAZANTE-MG
-→ bairro = "ANTONIO SECRETARIO", cidade = "Vazante", estado = "MG". NUNCA bairro = "Vazante".
+NUNCA use o nome da cidade como bairro. Bairro e cidade são campos diferentes; não repita o mesmo valor.
 
 ==========================
 EXTRAÇÃO PASSO A PASSO
@@ -107,6 +110,7 @@ EXTRAÇÃO PASSO A PASSO
 2. numero: 
    - Se aparecer "S/N" ou "Sem Número" → use "S/N"
    - Se aparecer um número explícito de endereço → extraia esse número
+   - NUNCA use 99999, 00000 ou qualquer número inventado. Se não enxergar número → "S/N"
    - "S/N" SEMPRE vai no campo numero, NUNCA em complemento
 
 3. complemento: 
@@ -123,12 +127,12 @@ EXTRAÇÃO PASSO A PASSO
 
 4. bairro: 
    - Nome que aparece DEPOIS do complemento e ANTES da linha "CIDADE-ESTADO" (ou CEP/cidade). Primeira posição.
-   - Se o endereço está em linhas: a linha ENTRE rua e "CIDADE-ESTADO" é o bairro (ex.: ANTONIO SECRETARIO). Extraia esse texto.
-   - Bairros podem ter nomes como "Antonio Secretario", "Centro", "Jardim X", "Área Rural". "Área Rural" ou "Area Rural" é bairro válido. NUNCA use o nome da cidade como bairro.
-   - Extraia exatamente como está. NÃO começa com "RUA" ou "AVENIDA".
+   - Em layout em linhas: a linha ENTRE rua e "CIDADE-ESTADO" é o bairro. Extraia esse texto.
+   - Bairros podem ser Centro, Jardim X, Área Rural, córrego, loteamento, etc. "Área Rural" / "Area Rural" é válido. NUNCA use o nome da cidade como bairro.
+   - Extraia exatamente como está. Bairro NÃO começa com "RUA" ou "AVENIDA".
 
 5. cidade: 
-   - Nome IMEDIATAMENTE ANTES da sigla do estado (MG, SP) ou antes do hífen em "CIDADE-ESTADO" (ex.: VAZANTE-MG → "Vazante"). Segunda posição.
+   - Nome IMEDIATAMENTE ANTES da sigla do estado (MG, SP, etc.) ou antes do hífen em "CIDADE-ESTADO". Segunda posição.
    - Extraia exatamente como está. APENAS da linha do endereço do cliente.
    - NUNCA use o mesmo valor que bairro.
 
@@ -153,7 +157,7 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
    - Se não começar com uma dessas palavras → ERRO GRAVE
    - NÃO deve conter bairro, cidade, Quadra, Lote, número, apartamento
 
-2. numero: "S/N" ou número de endereço
+2. numero: "S/N" ou número de endereço (lido na imagem). NUNCA 99999, 00000 ou inventado.
    - "S/N" NUNCA vai em complemento
 
 3. complemento: Elementos após rua e antes do bairro
@@ -186,10 +190,12 @@ ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
    - Se bairro == cidade → ERRO. Você repetiu um. Nunca use o nome da cidade como bairro.
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
-- Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
+- Se você não encontrar um campo explicitamente na imagem, use "" (string vazia) ou "S/N" (apenas para numero)
 - NÃO invente nomes de rua, números, complementos, bairros, cidades, estados ou CEPs
-- NUNCA use CEP 99999, 00000, 12345678 ou qualquer CEP genérico. CEP só com 8 dígitos lidos na imagem; senão "".
-- NÃO use "RUA SEM NOME" nem "CARAI" (ou parecidos) a menos que estejam escritos no documento
+- NUNCA CEP 99999, 00000, 12345678 ou genéricos. CEP = 8 dígitos lidos na imagem; senão "".
+- NUNCA numero 99999, 00000 ou inventado. Numero = "S/N" ou número lido na imagem; senão "S/N".
+- Nomes de bairro (Centro, Área Rural, etc.) vão em bairro, nunca em rua. Rua começa com RUA/AVENIDA/ESTRADA/RODOVIA.
+- Use "RUA SEM NOME" apenas se o documento disser explicitamente isso para a via.
 - NÃO use valores de outras partes da fatura
 - É MELHOR retornar campos vazios do que inventar valores incorretos
 
