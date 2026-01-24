@@ -110,6 +110,22 @@ async def extract_energy(
         except Exception as e:
             log(f"[crop] {e}")
 
+    if settings.debug and (customer_crop_img is not None or consumption_crop_img is not None):
+        _ts = int(time.time() * 1000)
+        _c = "".join(c if c.isalnum() or c in "-_" else "_" for c in concessionaria.strip() or "x")[:60]
+        _u = "".join(c if c.isalnum() or c in "-_" else "_" for c in uf.strip() or "x")[:10]
+        _root = Path(__file__).resolve().parents[1]
+        _dir = _root / "debug_crops"
+        _dir.mkdir(parents=True, exist_ok=True)
+        if customer_crop_img is not None:
+            _p = _dir / f"customer_{_c}_{_u}_{_ts}.png"
+            customer_crop_img.save(_p)
+            log(f"[debug] crop salvo: {_p}")
+        if consumption_crop_img is not None:
+            _p = _dir / f"consumption_{_c}_{_u}_{_ts}.png"
+            consumption_crop_img.save(_p)
+            log(f"[debug] crop salvo: {_p}")
+
     t_infer = time.time()
     result_customer = None
     result_consumption = None
@@ -123,7 +139,8 @@ async def extract_energy(
             return
         try:
             prompt_c = read_customer_address_prompt(concessionaria, uf)
-            result_customer = await infer_one(customer_crop_img, prompt_c, adapter_path)
+            _label = "customer" if settings.debug else None
+            result_customer = await infer_one(customer_crop_img, prompt_c, adapter_path, debug_label=_label)
             if result_customer:
                 try:
                     payload_customer = extract_json(result_customer)
@@ -138,8 +155,9 @@ async def extract_energy(
             return
         try:
             prompt_cons = read_consumption_prompt()
+            _label = "consumption" if settings.debug else None
             result_consumption = await infer_one(
-                consumption_crop_img, prompt_cons, adapter_path
+                consumption_crop_img, prompt_cons, adapter_path, debug_label=_label
             )
             if result_consumption:
                 try:
@@ -183,11 +201,12 @@ Contexto: UF={uf}, Concessionária={concessionaria}
 
 Analise a imagem e retorne o JSON:"""
 
+    _label_full = "full" if settings.debug else None
     if settings.use_subprocess:
         await asyncio.gather(_do_customer(), _do_consumption())
         prompt_full = _build_prompt_full()
         try:
-            result_full = await infer_one(img, prompt_full, adapter_path)
+            result_full = await infer_one(img, prompt_full, adapter_path, debug_label=_label_full)
         except Exception as e:
             log(f"[infer] full: {e}")
             result_full = None
@@ -197,7 +216,7 @@ Analise a imagem e retorne o JSON:"""
             await _do_consumption()
             prompt_full = _build_prompt_full()
             try:
-                result_full = await infer_one(img, prompt_full, adapter_path)
+                result_full = await infer_one(img, prompt_full, adapter_path, debug_label=_label_full)
             except Exception as e:
                 log(f"[infer] full: {e}")
                 result_full = None

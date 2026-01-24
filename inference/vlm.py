@@ -149,6 +149,7 @@ async def _infer_subprocess(
     img: Image.Image,
     prompt_text: str,
     adapter_path: Path | None = None,
+    debug_label: str | None = None,
 ) -> str:
     """Inferência via subprocess (python -m mlx_vlm.generate)."""
     if not has_mlx_vlm:
@@ -196,6 +197,11 @@ async def _infer_subprocess(
                 text=True,
                 timeout=settings.request_timeout_s,
             )
+            if settings.debug:
+                lbl = f" [{debug_label}]" if debug_label else ""
+                log(f"[debug] SAÍDA BRUTA (subprocess){lbl} STDOUT:\n{r.stdout}")
+                if r.stderr:
+                    log(f"[debug] SAÍDA BRUTA (subprocess){lbl} STDERR:\n{r.stderr}")
             if r.returncode != 0:
                 err = r.stderr or r.stdout or "Erro desconhecido"
                 log(f"[infer] subprocess exit {r.returncode}: {err[:300]}")
@@ -221,6 +227,7 @@ async def _infer_in_process(
     img: Image.Image,
     prompt_text: str,
     adapter_path: Path | None = None,
+    debug_label: str | None = None,
 ) -> str:
     """Inferência in-process (MLX-VLM generate)."""
     if not has_mlx_vlm or MODEL is None or PROCESSOR is None or CONFIG is None:
@@ -255,6 +262,9 @@ async def _infer_in_process(
             raw = getattr(res, "text", res)
             if not isinstance(raw, str):
                 raw = str(raw)
+            if settings.debug:
+                lbl = f" [{debug_label}]" if debug_label else ""
+                log(f"[debug] SAÍDA BRUTA (in-process){lbl}:\n{raw}")
             out = raw.strip()
             out = re.sub(r"(?<=\d),(?=\d)", ".", out)
             return out
@@ -270,8 +280,9 @@ async def infer_one(
     img: Image.Image,
     prompt_text: str,
     adapter_path: Path | None = None,
+    debug_label: str | None = None,
 ) -> str:
     """Inferência: subprocess ou in-process conforme config."""
     if settings.use_subprocess:
-        return await _infer_subprocess(img, prompt_text, adapter_path)
-    return await _infer_in_process(img, prompt_text, adapter_path)
+        return await _infer_subprocess(img, prompt_text, adapter_path, debug_label)
+    return await _infer_in_process(img, prompt_text, adapter_path, debug_label)

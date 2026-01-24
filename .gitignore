@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 data/
+
+# Debug crops (quando config.debug=True)
+debug_crops/

@@ -29,5 +29,8 @@ class Settings(BaseModel):
     # (customer || consumption, depois full). Sem subprocess: in-process + GATE (1 por worker).
     use_subprocess: bool = True
 
+    # Se True: loga SAÍDA BRUTA do modelo (completa, sem corte/formatação) e salva crops em debug_crops/
+    debug: bool = False
+
 
 settings = Settings()
