@@ -22,6 +22,7 @@ from core import (
     read_consumption_prompt,
     read_customer_address_prompt,
     read_prompt,
+    read_retry_cep_prompt,
     save_image_temp,
 )
 from inference import (
@@ -185,6 +186,36 @@ async def extract_energy(
         except Exception as e:
             log(f"[infer] consumo: {e}")
 
+    def _cep_valid(v: str | None) -> bool:
+        if v is None:
+            return False
+        s = str(v).strip()
+        if not s or s.lower() == "null":
+            return False
+        digits = "".join(c for c in s if c.isdigit())
+        return len(digits) == 8
+
+    async def _retry_cep_if_invalid() -> None:
+        if not payload_customer or customer_crop_img is None:
+            return
+        if _cep_valid(payload_customer.get("cep")):
+            return
+        log("[retry] CEP inválido ou ausente, tentando retry com retry_cep")
+        try:
+            prompt_retry = read_retry_cep_prompt()
+            _label = "retry_cep" if settings.debug else None
+            res = await infer_one(
+                customer_crop_img, prompt_retry, adapter_path, debug_label=_label
+            )
+            data = extract_json(res) if res else {}
+            c = data.get("cep") if isinstance(data, dict) else None
+            if _cep_valid(c):
+                digits = "".join(x for x in str(c).strip() if x.isdigit())
+                payload_customer["cep"] = digits
+                log("[retry] CEP ok após retry")
+        except Exception as e:
+            log(f"[retry] CEP: {e}")
+
     def _build_prompt_full() -> str:
         endereco_ctx = ""
         if payload_customer:
@@ -214,6 +245,7 @@ Analise a imagem e retorne o JSON:"""
     _label_full = "full" if settings.debug else None
     if settings.use_subprocess:
         await asyncio.gather(_do_customer(), _do_consumption())
+        await _retry_cep_if_invalid()
         prompt_full = _build_prompt_full()
         try:
             result_full = await infer_one(img, prompt_full, adapter_path, debug_label=_label_full)
@@ -224,6 +256,7 @@ Analise a imagem e retorne o JSON:"""
         async with GATE:
             await _do_customer()
             await _do_consumption()
+            await _retry_cep_if_invalid()
             prompt_full = _build_prompt_full()
             try:
                 result_full = await infer_one(img, prompt_full, adapter_path, debug_label=_label_full)

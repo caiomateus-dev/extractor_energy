@@ -95,3 +95,10 @@ def read_consumption_prompt() -> str:
     if not path.exists():
         raise RuntimeError(f"Arquivo {path.as_posix()} não encontrado.")
     return path.read_text(encoding="utf-8").strip()
+
+
+def read_retry_cep_prompt() -> str:
+    path = PROMPTS_DIR / "retry_cep.md"
+    if not path.exists():
+        raise RuntimeError(f"Arquivo {path.as_posix()} não encontrado.")
+    return path.read_text(encoding="utf-8").strip()

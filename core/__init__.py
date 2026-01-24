@@ -9,6 +9,7 @@ from .prompts import (
     read_consumption_prompt,
     read_customer_address_prompt,
     read_prompt,
+    read_retry_cep_prompt,
 )
 from .images import enhance_address_image, load_image, save_image_temp
 from .json_utils import extract_json
@@ -25,6 +26,7 @@ __all__ = [
     "read_prompt",
     "read_customer_address_prompt",
     "read_consumption_prompt",
+    "read_retry_cep_prompt",
     "save_image_temp",
     "load_image",
     "enhance_address_image",
