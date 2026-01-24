@@ -25,5 +25,9 @@ class Settings(BaseModel):
     adapters_dir: str = "adapters"  # Diretório onde os adapters LoRA são armazenados
     use_lora_adapters: bool = True  # Se True, tenta carregar adapters LoRA quando disponíveis
 
+    # Inferência via subprocess (python -m mlx_vlm.generate). Permite 3 inferências em paralelo
+    # (customer || consumption, depois full). Sem subprocess: in-process + GATE (1 por worker).
+    use_subprocess: bool = True
+
 
 settings = Settings()

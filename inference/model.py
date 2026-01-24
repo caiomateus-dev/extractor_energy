@@ -60,8 +60,11 @@ def clear_metal_cache() -> None:
 
 def _boot_model() -> None:
     global MODEL, PROCESSOR, CONFIG, GATE
+    if settings.use_subprocess:
+        GATE = None
+        log("[boot] use_subprocess=True: modelo não carregado. Inferência via python -m mlx_vlm.generate.")
+        return
     # Metal não suporta 2+ inferências em paralelo no mesmo processo.
-    # GATE=1 serializa. Paralelismo real: uvicorn --workers N.
     GATE = asyncio.Semaphore(1)
     if not has_mlx_vlm:
         log("[boot] mlx-vlm ausente. Use venv e `uv run uvicorn main:app --reload`.")

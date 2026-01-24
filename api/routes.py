@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import time
 from pathlib import Path
@@ -116,41 +117,47 @@ async def extract_energy(
     payload_customer = {}
     payload_consumption = {}
 
-    async with GATE:
-        if customer_crop_img is not None:
-            try:
-                prompt_c = read_customer_address_prompt(concessionaria, uf)
-                result_customer = await infer_one(customer_crop_img, prompt_c, adapter_path)
-                if result_customer:
-                    try:
-                        payload_customer = extract_json(result_customer)
-                    except Exception as e:
-                        log(f"[infer] JSON cliente: {e}")
-            except Exception as e:
-                log(f"[infer] cliente: {e}")
+    async def _do_customer() -> None:
+        nonlocal result_customer, payload_customer
+        if customer_crop_img is None:
+            return
+        try:
+            prompt_c = read_customer_address_prompt(concessionaria, uf)
+            result_customer = await infer_one(customer_crop_img, prompt_c, adapter_path)
+            if result_customer:
+                try:
+                    payload_customer = extract_json(result_customer)
+                except Exception as e:
+                    log(f"[infer] JSON cliente: {e}")
+        except Exception as e:
+            log(f"[infer] cliente: {e}")
 
-        if consumption_crop_img is not None:
-            try:
-                prompt_cons = read_consumption_prompt()
-                result_consumption = await infer_one(
-                    consumption_crop_img, prompt_cons, adapter_path
-                )
-                if result_consumption:
-                    try:
-                        payload_consumption = extract_json(result_consumption)
-                    except Exception as e:
-                        log(f"[infer] JSON consumo: {e}")
+    async def _do_consumption() -> None:
+        nonlocal result_consumption, payload_consumption
+        if consumption_crop_img is None:
+            return
+        try:
+            prompt_cons = read_consumption_prompt()
+            result_consumption = await infer_one(
+                consumption_crop_img, prompt_cons, adapter_path
+            )
+            if result_consumption:
+                try:
+                    payload_consumption = extract_json(result_consumption)
+                except Exception as e:
+                    log(f"[infer] JSON consumo: {e}")
+                    payload_consumption = {"consumo_lista": []}
+                else:
+                    if not isinstance(payload_consumption, dict) or "consumo_lista" not in payload_consumption:
                         payload_consumption = {"consumo_lista": []}
                     else:
-                        if not isinstance(payload_consumption, dict) or "consumo_lista" not in payload_consumption:
-                            payload_consumption = {"consumo_lista": []}
-                        else:
-                            lst = payload_consumption["consumo_lista"]
-                            if isinstance(lst, list) and len(lst) > 13:
-                                payload_consumption["consumo_lista"] = lst[:13]
-            except Exception as e:
-                log(f"[infer] consumo: {e}")
+                        lst = payload_consumption["consumo_lista"]
+                        if isinstance(lst, list) and len(lst) > 13:
+                            payload_consumption["consumo_lista"] = lst[:13]
+        except Exception as e:
+            log(f"[infer] consumo: {e}")
 
+    def _build_prompt_full() -> str:
         endereco_ctx = ""
         if payload_customer:
             c = payload_customer.get("cidade", "").strip()
@@ -169,19 +176,31 @@ async def extract_energy(
                 if e:
                     endereco_ctx += f"- Estado: {e}\n"
                 endereco_ctx += "\nCRÍTICO: nome_cliente NÃO deve conter endereço. Apenas nome da pessoa/empresa.\n"
-
-        prompt_full = read_prompt(concessionaria, uf)
-        prompt_full = f"""{prompt_full}{endereco_ctx}
+        base = read_prompt(concessionaria, uf)
+        return f"""{base}{endereco_ctx}
 
 Contexto: UF={uf}, Concessionária={concessionaria}
 
 Analise a imagem e retorne o JSON:"""
 
+    if settings.use_subprocess:
+        await asyncio.gather(_do_customer(), _do_consumption())
+        prompt_full = _build_prompt_full()
         try:
             result_full = await infer_one(img, prompt_full, adapter_path)
         except Exception as e:
             log(f"[infer] full: {e}")
             result_full = None
+    else:
+        async with GATE:
+            await _do_customer()
+            await _do_consumption()
+            prompt_full = _build_prompt_full()
+            try:
+                result_full = await infer_one(img, prompt_full, adapter_path)
+            except Exception as e:
+                log(f"[infer] full: {e}")
+                result_full = None
 
     if img:
         img.close()
