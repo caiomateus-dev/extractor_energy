@@ -17,9 +17,6 @@ Formato do JSON esperado:
 REGRA ABSOLUTA - CAMPO RUA
 ==========================
 
-O nome do bairro não é o mesmo que o nome da cidade.
-Não repita campos
-
 O campo "rua" SEMPRE começa com uma destas palavras: "RUA", "AVENIDA", "ESTRADA", "RODOVIA".
 
 SE O PRIMEIRO TEXTO DO ENDEREÇO NÃO COMEÇAR COM UMA DESSAS PALAVRAS, VOCÊ ESTÁ ERRADO.
