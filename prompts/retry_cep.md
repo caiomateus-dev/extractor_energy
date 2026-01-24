@@ -3,17 +3,20 @@ Esta imagem contém o endereço do cliente de uma fatura de energia.
 Sua ÚNICA tarefa: encontrar e extrair o CEP.
 
 Onde procurar:
-- Ao lado ou após a palavra "CEP", "CEP:" ou "Cep"
-- Após bairro e cidade, antes ou depois da sigla do estado (MG, SP, etc.)
-- Formato típico: 5 dígitos, hífen, 3 dígitos (ex.: 30123-456) ou XX.XXX-XXX (ex.: 30.123-456)
+- Linha da cidade/UF: muitas vezes o CEP está no início, no formato NNNNN-NNN, antes do nome da cidade e da sigla do estado.
+- Ao lado de "CEP", "CEP:" ou "Cep", ou em linha separada.
+- Padrão: 5 dígitos, hífen, 3 dígitos (NNNNN-NNN). Pode ter ponto como separador de milhar. Remova hífen e ponto; retorne só 8 dígitos.
+
+O que NÃO é CEP:
+- Número de 5 dígitos SEM hífen na linha do endereço (rua, número, complemento) é número do imóvel (casa, quadra, lote). Nunca use como CEP.
+- CEP tem 8 dígitos e em geral o hífen (NNNNN-NNN). Número sem hífen na linha de endereço não é CEP.
 
 Regras:
-- CEP válido = exatamente 8 dígitos. Remova hífen ou ponto; retorne só os 8 dígitos.
-- Procure em TODA a imagem. Só retorne null se você realmente não vir nenhum CEP de 8 dígitos.
-- NUNCA use "99999", "00000" ou número de endereço (casa, quadra, lote) como CEP. CEP é o código postal.
-- Se enxergar um CEP no documento, extraia. Não desista com null à toa.
+- Procure em toda a imagem por NNNNN-NNN (com hífen). Se achar, extraia os 8 dígitos.
+- Só retorne null se não houver nenhum bloco de 8 dígitos (com ou sem hífen) no documento.
+- Nunca retorne como CEP um número de 5 dígitos sem hífen. Retorne o CEP real (8 dígitos) ou null.
 
 Retorne APENAS um JSON válido, nada mais:
 { "cep": "12345678" }
 
-Use null só se não houver CEP na imagem.
+Use null somente se não houver CEP na imagem.
