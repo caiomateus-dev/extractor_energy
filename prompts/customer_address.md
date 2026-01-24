@@ -34,17 +34,27 @@ SE O PRIMEIRO TEXTO DO ENDEREÇO NÃO COMEÇAR COM UMA DESSAS PALAVRAS, VOCÊ ES
 PROCURE NO INÍCIO DO ENDEREÇO por uma palavra que começa com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA".
 
 NUNCA coloque no campo "rua":
+- CEP (8 dígitos, formato XXXXX-XXX ou XX.XXX-XXX). CEP vai em "cep", NUNCA em rua.
 - Nome de bairro (Centro, Área Rural, córrego, loteamento, etc.)
 - Nome de cidade
 - Qualquer texto que NÃO começa com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA"
 
-Rua = via. Bairro e cidade vão nos seus campos. Rua SEMPRE começa com RUA/AVENIDA/ESTRADA/RODOVIA.
+Rua = via (RUA X, AVENIDA Y). CEP, bairro e cidade vão nos seus próprios campos. Rua SEMPRE começa com RUA/AVENIDA/ESTRADA/RODOVIA.
+
+==========================
+REGRA ABSOLUTA - CEP NUNCA EM RUA OU NÚMERO
+==========================
+
+CEP = 8 dígitos (XXXXX-XXX, XX.XXX-XXX ou XXXXXXXX). O CEP vai SOMENTE no campo "cep".
+NUNCA coloque CEP no campo "rua". NUNCA coloque CEP no campo "numero".
+Se você pôs um CEP (8 dígitos) em rua ou numero → ERRO GRAVE. Corrija: CEP só em "cep".
 
 ==========================
 REGRA ABSOLUTA - CAMPO NÚMERO
 ==========================
 
 NUNCA use "99999", "00000" ou número inventado no campo "numero".
+NUNCA coloque CEP no campo "numero". CEP → campo "cep".
 Se não houver número na imagem → use "S/N". Se houver número → extraia o valor real.
 Numero inventado é ERRO GRAVE.
 
@@ -105,11 +115,12 @@ EXTRAÇÃO PASSO A PASSO
    - Use "RUA SEM NOME" APENAS se a fatura disser explicitamente "Sem Nome" ou "S/N" para a via. NUNCA use como padrão ou se não tiver certeza.
    - Extraia essa palavra e tudo até a primeira vírgula
    - Se não encontrar uma palavra começando com "RUA"/"AVENIDA"/"ESTRADA"/"RODOVIA" no início, você está ERRADO
-   - NÃO inclua Quadra (Q.), Lote (L.), número, apartamento, bairro, cidade no campo rua
+   - NÃO inclua CEP (8 dígitos) em rua. CEP vai em "cep". NÃO inclua Quadra (Q.), Lote (L.), número, apartamento, bairro, cidade no campo rua
 
 2. numero: 
    - Se aparecer "S/N" ou "Sem Número" → use "S/N"
    - Se aparecer um número explícito de endereço → extraia esse número
+   - NUNCA use CEP (8 dígitos) em numero. CEP vai em "cep".
    - NUNCA use 99999, 00000 ou qualquer número inventado. Se não enxergar número → "S/N"
    - "S/N" SEMPRE vai no campo numero, NUNCA em complemento
 
@@ -154,10 +165,10 @@ VALIDAÇÃO OBRIGATÓRIA
 ANTES DE RETORNAR O JSON, VERIFIQUE:
 
 1. rua: DEVE começar com "RUA", "AVENIDA", "ESTRADA" ou "RODOVIA"
-   - Se não começar com uma dessas palavras → ERRO GRAVE
-   - NÃO deve conter bairro, cidade, Quadra, Lote, número, apartamento
+   - Se não começar com uma dessas palavras → ERRO GRAVE (ex.: 8 dígitos em rua = CEP, não rua)
+   - NÃO deve conter CEP, bairro, cidade, Quadra, Lote, número, apartamento
 
-2. numero: "S/N" ou número de endereço (lido na imagem). NUNCA 99999, 00000 ou inventado.
+2. numero: "S/N" ou número de endereço (lido na imagem). NUNCA CEP, 99999, 00000 ou inventado.
    - "S/N" NUNCA vai em complemento
 
 3. complemento: Elementos após rua e antes do bairro
@@ -194,6 +205,7 @@ REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - NÃO invente nomes de rua, números, complementos, bairros, cidades, estados ou CEPs
 - NUNCA CEP 99999, 00000, 12345678 ou genéricos. CEP = 8 dígitos lidos na imagem; senão "".
 - NUNCA numero 99999, 00000 ou inventado. Numero = "S/N" ou número lido na imagem; senão "S/N".
+- CEP (8 dígitos) vai em "cep" somente. NUNCA em rua nem em numero.
 - Nomes de bairro (Centro, Área Rural, etc.) vão em bairro, nunca em rua. Rua começa com RUA/AVENIDA/ESTRADA/RODOVIA.
 - Use "RUA SEM NOME" apenas se o documento disser explicitamente isso para a via.
 - NÃO use valores de outras partes da fatura

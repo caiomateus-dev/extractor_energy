@@ -175,7 +175,7 @@ async def _infer_subprocess(
             f.close()
             tmp_prompt_path = f.name
         cmd = [
-            sys.executable, "-m", "mlx_vlm.generate",
+            sys.executable, "-m", "mlx_vlm", "generate",
             "--model", settings.model_id,
             "--max-tokens", str(settings.max_tokens),
             "--temperature", str(settings.temperature),
