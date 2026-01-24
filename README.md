@@ -23,9 +23,9 @@ extractor_energy/
 - `uv sync`
 - `uv run uvicorn main:app --reload`
 
-Vários workers (paralelismo por processo, sem disputar Metal):
+**Requisições em paralelo:** Metal (Apple Silicon) não é thread-safe. Em um mesmo processo só roda 1 inferência por vez. Para 2+ requisições em paralelo, use vários workers (cada worker = 1 processo = 1 Metal):
 
-- `uv run uvicorn main:app --workers 3`
+- `uv run uvicorn main:app --workers 2`
 
 ### Endpoints
 

@@ -60,7 +60,9 @@ def clear_metal_cache() -> None:
 
 def _boot_model() -> None:
     global MODEL, PROCESSOR, CONFIG, GATE
-    GATE = asyncio.Semaphore(settings.max_concurrency)
+    # Metal não suporta 2+ inferências em paralelo no mesmo processo.
+    # GATE=1 serializa. Paralelismo real: uvicorn --workers N.
+    GATE = asyncio.Semaphore(1)
     if not has_mlx_vlm:
         log("[boot] mlx-vlm ausente. Use venv e `uv run uvicorn main:app --reload`.")
         return
@@ -68,6 +70,7 @@ def _boot_model() -> None:
     MODEL, PROCESSOR = load(settings.model_id)
     CONFIG = load_config(settings.model_id)
     log("[boot] model loaded")
+    log("[boot] Metal serializado (1 inferência/worker). Paralelo: uvicorn main:app --workers N")
     log_system_metrics("[boot][mem]")
 
 
