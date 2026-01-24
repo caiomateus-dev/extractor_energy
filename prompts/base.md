@@ -64,9 +64,7 @@ REGRAS IMPORTANTES:
      * Se aparecer CEP (formato numérico com ou sem hífen), tudo a partir do CEP NÃO faz parte do nome
      * Se aparecer hífen seguido de sigla de estado, tudo a partir do hífen NÃO faz parte do nome
    - PROCESSAMENTO: Identifique onde termina o nome pessoal/empresarial e começa a informação geográfica (cidade/estado/CEP). Extraia SOMENTE a parte do nome, parando antes da primeira informação geográfica identificada.
-   - O campo nome_cliente contém EXCLUSIVAMENTE o nome da pessoa física ou razão social da empresa, SEM qualquer informação geográfica
-
-LEIA TODOS OS TEXTOS E NÚMEROS VISÍVEIS NA IMAGEM. 
+   - O campo nome_cliente contém EXCLUSIVAMENTE o nome da pessoa física ou razão social da empresa, SEM qualquer informação geográfica. 
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar explicitamente um campo na fatura, use o valor padrão ("" para strings, null para opcionais, false para booleanos, [] para listas)
