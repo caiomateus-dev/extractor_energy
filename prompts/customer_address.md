@@ -18,7 +18,7 @@ Regras importantes:
 
 - Cidade deve ser normalizada (sem acentos, se necessário).
 
-- O CEP está na mesma linha da UF e Cidade, não é o primeiro numeor que encontrar
+- ***IMPORTANTE***: se encontrou o número do endereço o CEP é diferente dele, O CEP SEMPRE SERÁ 8 DIGITOS 
 - CEP brasileiro válido tem exatamente 8 dígitos e pode aparecer como "NNNNN-NNN" ou "NNNNNNNN".
 - O CEP quase sempre aparece junto do rótulo "CEP" ou no formato com hífen "NNNNN-NNN".
 - Prioridade máxima: se existir qualquer padrão "NNNNN-NNN" visível, esse é o CEP (remova o hífen e retorne 8 dígitos).
