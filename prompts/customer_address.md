@@ -30,11 +30,11 @@ Regras importantes:
 Formato de saída obrigatório:
 
 {
-  "cep": string | null,        // sempre 8 dígitos (somente números) ou null
   "rua": string | null,
   "numero": string | null,
   "complemento": string | null,
   "bairro": string | null,
   "cidade": string | null,
-  "uf": string | null
+  "uf": string | null,
+   "cep": string | null        // sempre 8 dígitos (somente números) ou null
 }
