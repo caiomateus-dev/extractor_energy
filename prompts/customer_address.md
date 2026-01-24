@@ -44,6 +44,25 @@ CRÍTICO: Bairro vem ANTES da cidade. Cidade vem ANTES do estado.
 Se você colocou o mesmo valor em bairro e cidade, você está ERRADO.
 
 ==========================
+BAIRRO vs CIDADE - POSIÇÃO NA IMAGEM
+==========================
+
+Na linha do endereço, a ORDEM é: ... complemento → BAIRRO → CEP (se houver) → CIDADE → ESTADO.
+
+- O nome que vem DEPOIS do complemento e ANTES do CEP/cidade é o BAIRRO. Extraia esse.
+- O nome que vem IMEDIATAMENTE ANTES da sigla do estado (MG, SP, etc.) é a CIDADE. Extraia esse.
+
+São dois campos em posições diferentes. Extraia o valor correto de cada posição.
+
+Exemplo: "..., Centro, 30100-000, Belo Horizonte, MG"
+  → bairro = "Centro" (entre complemento e CEP)
+  → cidade = "Belo Horizonte" (antes de MG)
+
+Se você colocou o mesmo valor em bairro e cidade: você repetiu um. Olhe de novo a ordem na imagem, identifique o primeiro nome (bairro) e o segundo (cidade), e extraia cada um corretamente.
+
+Exceção: se na imagem existir apenas UM nome entre complemento e estado, use esse nome em cidade e bairro="".
+
+==========================
 EXTRAÇÃO PASSO A PASSO
 ==========================
 
@@ -72,23 +91,14 @@ EXTRAÇÃO PASSO A PASSO
    - Se não houver complemento, use "" (string vazia)
 
 4. bairro: 
-   - Nome completo do bairro que aparece DEPOIS do complemento na linha do endereço
-   - O bairro vem DEPOIS do complemento e ANTES da cidade
-   - CRÍTICO: Leia CADA LETRA e CARACTERE com atenção. Extraia EXATAMENTE como aparece
-   - CRÍTICO: Inclua TODOS os caracteres: letras, números, espaços, sufixos (incluindo letras soltas no final)
-   - CRÍTICO: NÃO confunda bairro com cidade. Bairro vem ANTES da cidade na linha do endereço
-   - CRÍTICO: Se você colocou o mesmo valor em bairro e cidade, está ERRADO. Procure novamente
-   - Inclua prefixos (PARQUE, JARDIM, VILA, etc.) e sufixos (letras, números, etc.) se aparecerem
-   - O bairro NÃO começa com "RUA" ou "AVENIDA"
+   - Nome que aparece DEPOIS do complemento e ANTES do CEP ou da cidade na linha do endereço (primeira posição).
+   - Extraia exatamente como está. Inclua prefixos (PARQUE, JARDIM, VILA) se aparecerem.
+   - NÃO começa com "RUA" ou "AVENIDA". NUNCA use o mesmo valor que cidade.
 
 5. cidade: 
-   - Nome da cidade que aparece ANTES da sigla do estado na linha do endereço
-   - CRÍTICO: A cidade vem DEPOIS do bairro e ANTES do estado na linha do endereço
-   - CRÍTICO: Bairro e cidade são CAMPOS DIFERENTES. Se você colocou o mesmo valor em ambos, está ERRADO
-   - CRÍTICO: O valor de cidade DEVE ser diferente do valor de bairro. Se forem iguais, você está ERRADO
-   - CRÍTICO: Procure na linha do endereço pelo nome que aparece ANTES da sigla do estado (GO, MG, SP, etc.)
-   - Extraia APENAS da linha do endereço do cliente
-   - NÃO use cidade da distribuidora ou outras seções
+   - Nome que aparece IMEDIATAMENTE ANTES da sigla do estado (MG, SP, etc.) na linha do endereço (segunda posição).
+   - Extraia exatamente como está. APENAS da linha do endereço do cliente.
+   - NUNCA use o mesmo valor que bairro.
 
 6. estado: 
    - Sigla de 2 letras maiúsculas após a cidade
@@ -122,16 +132,8 @@ ANTES DE RETORNAR O JSON, VERIFIQUE:
    - CRÍTICO: Inclua TODOS os elementos que aparecem entre a rua e o bairro (Q., L., APART., RESIDENCIAL, etc.)
    - NÃO inclua "S/N"
 
-4. bairro: Nome completo como aparece na fatura
-   - CRÍTICO: Vem DEPOIS do complemento na linha do endereço
-   - CRÍTICO: Extraia EXATAMENTE como aparece, incluindo TODOS os caracteres (letras, números, espaços, sufixos)
-   - CRÍTICO: NÃO confunda bairro com cidade. Se você colocou o mesmo valor em ambos, está ERRADO
-   - NÃO começa com "RUA" ou "AVENIDA"
-
-5. cidade: Nome da cidade ANTES da sigla do estado
-   - CRÍTICO: A cidade vem DEPOIS do bairro na linha do endereço
-   - CRÍTICO: Bairro e cidade são CAMPOS DIFERENTES. Se você colocou o mesmo valor em ambos, está ERRADO
-   - CRÍTICO: O valor de cidade DEVE ser diferente do valor de bairro. Se forem iguais, você está ERRADO
+4. bairro: Primeiro nome entre complemento e estado (antes do CEP/cidade). bairro != cidade.
+5. cidade: Segundo nome, o que vem logo antes da sigla (MG, SP). cidade != bairro.
 
 6. estado, cep: APENAS da linha do endereço do cliente
 
@@ -144,12 +146,9 @@ ANTES DE RETORNAR O JSON, VERIFIQUE ESTAS REGRAS CRÍTICAS:
 1. complemento: Se aparecer "Q." ou "L." no endereço, eles DEVEM estar no complemento
    - Se você não incluiu "Q." ou "L." no complemento mas eles aparecem no endereço → ERRO GRAVE
 
-2. bairro e cidade: Eles DEVEM ser diferentes
-   - CRÍTICO: Se bairro == cidade → ERRO GRAVE. Você está ERRADO
-   - CRÍTICO: Na linha do endereço, bairro vem ANTES da cidade
-   - CRÍTICO: Cidade vem ANTES da sigla do estado (GO, MG, SP, etc.)
-   - CRÍTICO: Se você colocou o mesmo valor em ambos, PROCURE NOVAMENTE na linha do endereço
-   - CRÍTICO: O nome que vem ANTES da sigla do estado é a cidade, NÃO o bairro
+2. bairro e cidade: Dois campos, duas posições, dois valores
+   - Primeiro nome (após complemento, antes CEP/cidade) = bairro. Segundo (antes do estado) = cidade.
+   - Se bairro == cidade → ERRO. Você repetiu um. Extraia o correto de cada posição.
 
 REGRA ABSOLUTA - NÃO INVENTE VALORES:
 - Se você não encontrar um campo explicitamente na imagem, use "" (string vazia)
