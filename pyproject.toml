@@ -13,4 +13,6 @@ dependencies = [
     "torchvision>=0.15.0",
     "pymupdf>=1.26.7",
     "ultralytics>=8.4.6",
+    "paddlepaddle>=3.3.0",
+    "paddleocr>=3.3.3",
 ]
