@@ -2,17 +2,30 @@
 
 API FastAPI para extrair dados de faturas de energia com `mlx-vlm` (MLX, Apple Silicon).
 
-### Rodar local (recomendado)
+### Estrutura
 
-Use o ambiente do projeto (evita erro `ModuleNotFoundError: No module named 'mlx_vlm'` ao usar um Python global):
+```
+extractor_energy/
+├── main.py           # App FastAPI, inclui router
+├── config.py         # Settings
+├── core/             # Utilitários: prompts, imagens, JSON, normalização, adapters
+├── inference/        # Bootstrap do modelo, inferência VLM
+├── api/              # Rotas: /health, /extract/energy
+├── detectors/        # YOLO para recortes (cliente, consumo)
+├── prompts/          # base.md, mapper.json, specs por concessionária
+├── adapters/         # LoRA por concessionária_UF
+├── utils/
+└── training/
+```
+
+### Rodar local
 
 - `uv sync`
 - `uv run uvicorn main:app --reload`
 
-Alternativa (ativando venv):
+Vários workers (paralelismo por processo, sem disputar Metal):
 
-- `source .venv/bin/activate`
-- `uvicorn main:app --reload`
+- `uv run uvicorn main:app --workers 3`
 
 ### Endpoints
 
@@ -24,5 +37,5 @@ Alternativa (ativando venv):
 Em `prompts/`:
 
 - `base.md`: sempre aplicado
-- `mapper.json`: mapeia `concessionaria` + `uf` -> arquivo `.md` (ex: `equatorial` + `go` -> `equatorial_go.md`)
-- `mapper.json` também suporta `aliases` para padronizar entradas (ex: `cemig-d` -> `cemig`)
+- `mapper.json`: mapeia `concessionaria` + `uf` -> arquivo `.md`
+- `mapper.json` suporta `aliases` (ex: `cemig-d` -> `cemig`)

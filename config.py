@@ -20,6 +20,8 @@ class Settings(BaseModel):
     request_timeout_s: int = 45
 
     prompts_dir: str = "prompts"
+    adapters_dir: str = "adapters"  # Diretório onde os adapters LoRA são armazenados
+    use_lora_adapters: bool = True  # Se True, tenta carregar adapters LoRA quando disponíveis
 
 
 settings = Settings()
