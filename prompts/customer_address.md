@@ -6,13 +6,6 @@ Não invente dados que não estejam presentes.
 Quando um campo não existir, retorne null.
 
 Regras importantes:
-- O CEP está na mesma linha da UF e Cidade, não é o primeiro numeor que encontrar
-- CEP brasileiro válido tem exatamente 8 dígitos e pode aparecer como "NNNNN-NNN" ou "NNNNNNNN".
-- O CEP quase sempre aparece junto do rótulo "CEP" ou no formato com hífen "NNNNN-NNN".
-- Prioridade máxima: se existir qualquer padrão "NNNNN-NNN" visível, esse é o CEP (remova o hífen e retorne 8 dígitos).
-- Nunca use o número do endereço como CEP.
-- Se não houver um CEP com 8 dígitos (com ou sem hífen), retorne cep = null.
-
 - UF deve ser a sigla do estado (ex: MG, SP, RJ).
 
 - Rua pode conter complementos como CÓRREGO, AV, RUA, ESTRADA, etc.
@@ -25,7 +18,15 @@ Regras importantes:
 
 - Cidade deve ser normalizada (sem acentos, se necessário).
 
+- O CEP está na mesma linha da UF e Cidade, não é o primeiro numeor que encontrar
+- CEP brasileiro válido tem exatamente 8 dígitos e pode aparecer como "NNNNN-NNN" ou "NNNNNNNN".
+- O CEP quase sempre aparece junto do rótulo "CEP" ou no formato com hífen "NNNNN-NNN".
+- Prioridade máxima: se existir qualquer padrão "NNNNN-NNN" visível, esse é o CEP (remova o hífen e retorne 8 dígitos).
+- Nunca use o número do endereço como CEP.
+- Se não houver um CEP com 8 dígitos (com ou sem hífen), retorne cep = null.
+
 - Não explique nada, apenas retorne o JSON.
+
 
 Formato de saída obrigatório:
 
