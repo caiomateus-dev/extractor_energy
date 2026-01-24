@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import os
 import time
 from pathlib import Path
 
@@ -52,7 +53,8 @@ async def extract_energy(
     file: UploadFile = File(...),
 ):
     t0 = time.time()
-    log(f"[req] concessionaria={concessionaria} uf={uf}")
+    pid = os.getpid()
+    log(f"[req] pid={pid} concessionaria={concessionaria} uf={uf}")
 
     adapter_path = find_adapter_path(concessionaria, uf)
     if adapter_path:
@@ -232,6 +234,6 @@ Analise a imagem e retorne o JSON:"""
 
     payload = ensure_contract(payload, concessionaria, uf)
     ms = int((time.time() - t_infer) * 1000)
-    log(f"[req] {concessionaria} {uf} {ms}ms")
+    log(f"[req] pid={pid} {concessionaria} {uf} {ms}ms")
     log_system_metrics("[req][mem]")
     return JSONResponse(content=payload)
