@@ -6,19 +6,31 @@ Não invente dados que não estejam presentes.
 Quando um campo não existir, retorne null.
 
 Regras importantes:
-- CEP deve conter apenas números (8 dígitos).
+
+- CEP brasileiro válido tem exatamente 8 dígitos e pode aparecer como "NNNNN-NNN" ou "NNNNNNNN".
+- O CEP quase sempre aparece junto do rótulo "CEP" ou no formato com hífen "NNNNN-NNN".
+- Prioridade máxima: se existir qualquer padrão "NNNNN-NNN" visível, esse é o CEP (remova o hífen e retorne 8 dígitos).
+- Nunca use o número do endereço como CEP.
+- Se não houver um CEP com 8 dígitos (com ou sem hífen), retorne cep = null.
+
 - UF deve ser a sigla do estado (ex: MG, SP, RJ).
+
 - Rua pode conter complementos como CÓRREGO, AV, RUA, ESTRADA, etc.
+
 - Número pode ser "S/N", "0", "99999" ou similar se assim constar no documento.
+
 - Complemento inclui caixas postais, blocos, apartamentos, referências.
+
 - Bairro pode ser "ÁREA RURAL", "CENTRO", "ZONA RURAL", etc.
+
 - Cidade deve ser normalizada (sem acentos, se necessário).
+
 - Não explique nada, apenas retorne o JSON.
 
 Formato de saída obrigatório:
 
 {
-  "cep": string | null,
+  "cep": string | null,        // sempre 8 dígitos (somente números) ou null
   "rua": string | null,
   "numero": string | null,
   "complemento": string | null,
