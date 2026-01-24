@@ -14,6 +14,12 @@ Formato do JSON esperado:
 }
 
 ==========================
+REGRA ABSOLUTA - CAMPO CEP
+==========================
+
+O campo "cep" aparece sempre com 8 números. XXXXX-XXX ou XX.XXX-XXX ou XXXXXXXX
+
+==========================
 REGRA ABSOLUTA - CAMPO RUA
 ==========================
 
